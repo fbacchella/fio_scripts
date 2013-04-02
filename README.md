@@ -50,34 +50,37 @@ for each of these the number of users is varied and the I/O request size is
 varied.
 
 
-	usage: ./fio.sh  [options]
-	
-	run a set of I/O benchmarks
-	
-	OPTIONS:
-	   -h              Show this message
-	   -b  binary      name of fio binary, defaults to ./fio
-	   -d  directory   work directory where fio creates a file and reads and writes, 
-	                           default ./ (and default filename created is fiodata) 
-	   -o  directory   results directory, where to put output files, defaults to ./
-	   -t  tests       tests to run, defaults to readrand,read,write 
-	                           options are
-		                      readrand - IOPS test : 8k by 1,8,16,32 users
-		                      read  - MB/s test : 1M by 1,8,16,32 users & 8k,32k,128k,1m by 1 user
-	                      write - redo test, ie sync seq writes : 1k, 8k, 128k by 1 user
-	                      randrw   - workload test: 8k read and write by 1,8,16,32 users
-	   -s  seconds     seconds to run each test for, default 60
-	   -m  megabytes   megabytes for the test I/O file to be used, default 8000 (ie 8G)
-	   -i              individual file per process, default size 100m (overrides -m )
-	   -f              force run, ie don't ask for confirmation on options
-	   -c              force creation of work file otherwise if it exists we use it as is
-	   -r raw_device   use named raw device instead of file
-	   -u #users       force test to only use this many users
-	   -l blocksize    force test to only use this blocksize in KB, ie 1-1024 
-	   -e recordsize   use this recordsize if/when creating the zfs file system, default 8K
-	
-	       example
-	                  fio.sh -b ./fio.opensolaris
+    usage: $0  [options]
+
+    run a set of I/O benchmarks
+
+    OPTIONS:
+       -h              Show this message
+       -d  [1|0]       do/don't directio
+       -b  binary      name of fio binary, defaults to fio
+       -w  directory   work directory where fio creates a fio and reads and writes, no default
+       -o  directory   output directory, where to put output files, defaults to ./
+       -t  tests       tests to run, defaults to all, options are
+                          readrand - IOPS test : 8k by 1,8,16,32 users 
+                          read  - MB/s test : 1M by 1,8,16,32 users & 8k,32k,128k,1m by 1 user
+                          write - redo test, ie sync seq writes : 1k, 4k, 8k, 128k, 1024k by 1 user 
+                          randrw   - workload test: 8k read write by 1,8,16,32 users 
+       -s  seconds     seconds to run each test for, default 60
+       -m  megabytes   megabytes for the test I/O file to be used, default 65536 (ie 64G)
+       -i              individual file per process, default size 100m (otherwise uses the -m size)
+       -c              force creation of work file otherwise if it exists we use it as is
+       -u #users       test only use this many users
+       -l blocksize    test only use this blocksize in KB, ie 1-1024 
+       -e recordsize   use this recordsize if/when creating the zfs file system, default 8K
+       -d              Use DTrace on the run
+       -x              remove work file after run
+       -y              initialize raw devices to "-m megabytes" with writes 
+                       writes will be evenly written across multiple devices,  default is 64GB
+       -z raw_sizes    size of each raw device. If multiple, colon separate, list inorder of raw_device
+       -r raw_device   use raw device instead of file, multi devices colon separated
+                          
+           example
+                      fio.sh -b ./fio.opensolaris -w /domain0/fiotest  -t rand_read -s 10 -m 1000 -f
 
 Running fioparse.sh
 ---------------------------
@@ -182,12 +185,11 @@ Start R and load up the above in R and it creates the dataframe "m"
 	21    write    16   8K 179.438  0.387 0.2  691     2 22968    0     0     0    95   2   0   0    0    0    0     0     0     0  0  0  0  0.454  0.644   0.804     9.92    19.84   40.192
 	22    write    16 128K   67.58 16.606 0.7 5325 227.1   540    0     0     0     0   0   1  84    3    4    4     0     0     0  0  0  0 20.096  49.92   60.16 5341.184 5341.184 5341.184
 	
-In R we can now source "fio.r" which creates a function "graphit(m)"
+In R we can now source "fiop.r" which creates a function "graphit(m)"
 
-	source("fio.r")        # create the graphit() function
+	source("fiop.r")        # create the graphit() function
 	source("data_ssd.r")   # load some fio data, data_ssd.r is provided in github distro
-	graphit(m)             # graph the data
-	source("fiog.r")       # this will graph various combinations and save the png files 
+	source("fiopg.r")       # this will graph various combinations and save the png files 
 	                       # to C:\temp
 	                       # the graphs will be for readrand, read and write tests
 	                       # the graphs will graph different user loads and I/O sizes in the data
@@ -238,6 +240,18 @@ for example
 	source("fiop.r")
 	source("data_emc.r")
 	source("fiopg.r")
+
+NOTE: to source files they have to be in R's working directory.
+You can get the working directory with
+
+	getwd()
+
+you can set working directory with
+
+	setwd("C:\\Temp\\")
+
+for example to set it to C:\Temp
+
 
 Each PNG file will have 3 graphs
 

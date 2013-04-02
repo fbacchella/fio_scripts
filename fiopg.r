@@ -1,5 +1,5 @@
 
-dir <- "C:\\Temp\\"
+dir <- "/tmp"
 poly=1
 hist=1
 ppi <- 300
