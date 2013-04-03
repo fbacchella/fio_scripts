@@ -551,15 +551,6 @@ if [ $RAW -eq 0 ]; then
    eval $cmd | sed -e 's/^/   /'
 fi
 
-if [ $FORCE = "n" ] ; then
-  echo "created datafile, proceed?"
-  read readit
-  if [ ! $readit = "y" ] ; then
-    exit
-  fi
-fi
-
-
 # following functions 
 #    init
 #    read
@@ -776,4 +767,12 @@ if [ $REMOVE == 1 ]  && [ $RAW == 0 ] ; then  # {
     eval $cmd
 fi # }
 ./fioparse.sh  $OUTPUT/*out  > $OUTPUT/fio_summary.out 
+./fioparse.sh -R $(uname -n) $OUTPUT/*out  > $OUTPUT/fio_summary.r 
 cat $OUTPUT/fio_summary.out
+cat << __EOF__ > $OUTPUT/plot.r
+R --no-save
+source("fiop.r")
+source("$OUTPUT/fio_summary.r")
+dir =  "$OUTPUT"
+source("fiopg.r")
+__EOF__

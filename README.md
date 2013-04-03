@@ -115,7 +115,7 @@ set of statistics from the output files.
 The above output is for human consumption, but when run with "-r" the output
 will be given in R format:
 
-	./fioparse.sh -r *out
+	./fioparse.sh -R onetest *out
 	
 	m <- NULL
 	m <- matrix(c(
@@ -187,16 +187,19 @@ Start R and load up the above in R and it creates the dataframe "m"
 	
 In R we can now source "fiop.r" which creates a function "graphit(m)"
 
-	source("fiop.r")        # create the graphit() function
-	source("data_ssd.r")   # load some fio data, data_ssd.r is provided in github distro
-	source("fiopg.r")       # this will graph various combinations and save the png files 
-	                       # to C:\temp
+	source("fiop.r")       # create the graphit() function
+    m <- read.csv("data_ssd.csv")
+	                       # load some fio data, data_ssd.r is provided in github distro
+	testtype = "nyl"
+	dir =  "/tmp/truc/"
+	source("fiopg.r")      # this will graph various combinations and save the png files 
+	                       # to /tmp/
 	                       # the graphs will be for readrand, read and write tests
 	                       # the graphs will graph different user loads and I/O sizes in the data
 
 By default it will graph 8K random reads.
 If you source "fiog.r" it will run through a series of different combinations graphing them and saving the output.
-The output is save to png files in the directory  C:\TMP
+The output is save to png files in the directory  /tmp/
 
 Example data files are included
 
