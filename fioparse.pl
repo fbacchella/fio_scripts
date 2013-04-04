@@ -9,11 +9,6 @@ foreach $argnum (0 .. $#ARGV) {
     ${$ARGV[$argnum]}=1;
 }
 print "continuting ... \n" if defined ($debug);
-if(defined ($rplots) && $rplots == 1) {
-    $verbose = 1;
-    $percentiles = 1;
-}
-
 
 # these are all the possible buckets for dtrace
 @buckets_dtrace=("1", "2", "4", "8", "16", "32", "64", "128", "256", "512", "1024", "2048", "4096", "8192", "16384", "32768", "65536", "131072", "262144", "524288", "1048576", "2097152", "4194304", "8388608", "16777216", "33554432");
@@ -69,6 +64,8 @@ $bucketr{20000000}="s2g";
 @output_buckets=("50","1000","4000","10000","20000","50000","100000","1000000","2000000","20000000");
 @rbuckets_fio=("4","100","250","500","1000","2000","4000","10000","20000","50000","100000","250000","500000","1000000","2000000","20000000");
 @percentiles_header=("95%", "99%", "99.5%", "99.9%", "99.95%", "99.99%");
+# clat of interest
+@clat_class = ("95.00", "99.00", "99.50", "99.90", "99.95", "99.99");
 
 sub hist_head {
     printf("%8s", "test");
@@ -167,12 +164,7 @@ sub print_hist {
                 printf(" %5s",int( 100*($bucketu{$tu}/$iop) ) );
             }
             else {
-                if ( $rplot_hist == 1 ) {
-                    printf(",%s=%2d",$bucketr{$tu},0 );
-                }
-                else {
-                    printf(" %5s","");
-                }
+                printf(" %5s","");
             }
             $bucketu{$tu}=0;
         }
@@ -232,44 +224,35 @@ while (my $line = <STDIN>) {
         next;
     }
     # lat (usec): min=7 , max=1305.5K, avg=61053.50, stdev=73135.80
-    if ( $line =~ m/ stdev=/ ) { # filter out histogram lines that have "lat"
-        if ( $line =~ m/ lat/ ) { # filter out clat lines
-            $lat=$unit=$latmin=$latmax=$latstd=$line;
-            $lat =~ s/.*avg=//;
-            $lat =~ s/,.*//;
-            $latmin =~ s/.*min=//;
-            $latmin =~ s/ *,.*//;
-            $latmax =~ s/.*max=//;
-            $latmax =~ s/ *,.*//;
-            $latstd =~ s/.*stdev=//;
-            $latstd =~ s/ *//;
+    if ( $line =~ m/ lat .* stdev=/ ) { # filter out histogram lines that have "lat"
+        $lat=$unit=$latmin=$latmax=$latstd=$line;
+        $lat =~ s/.*avg=//;
+        $lat =~ s/,.*//;
+        $latmin =~ s/.*min=//;
+        $latmin =~ s/ *,.*//;
+        $latmax =~ s/.*max=//;
+        $latmax =~ s/ *,.*//;
+        $latstd =~ s/.*stdev=//;
+        $latstd =~ s/ *//;
 
-            $unit =~ s/.*\(//;
-            $unit =~ s/\).*//;
-            $unit =~ s/msec/1000/;
-            $unit =~ s/usec/1/;
+        $unit =~ s/.*\(//;
+        $unit =~ s/\).*//;
+        $unit =~ s/msec/1000/;
+        $unit =~ s/usec/1/;
 
-            foreach $var ( "latmin" , "latmax" , "laststd" ) {
-                if ( ${$var} =~ m/K/ ) {
-                    ${$var} =~ s/K//;
-                    ${$var} = ${$var} *1000;
-                }
+        foreach $var ( "latmin" , "latmax" , "laststd" ) {
+            if ( ${$var} =~ m/K/ ) {
+                ${$var} =~ s/K//;
+                ${$var} = ${$var} *1000;
             }
-
-            $latmin{$type}=$latmin*$unit;
-            $latmax{$type}=$latmax*$unit;
-            $latstd{$type}=$latstd*$unit;
-
-            $lat{$type}=$lat*$unit;
-            $unit{$type}=$unit;
-            next;
         }
-    }
-    # #job: (g=0): rw=randread, bs=8K-8K/8K-8K, ioengine=psync, iodepth=2
-    if ( $line =~ m/ioengine/ ) {
-        $bs=$line;
-        $bs =~ s/.* bs=//;
-        $bs =~ s/-.*//;
+
+        $latmin{$type}=$latmin*$unit;
+        $latmax{$type}=$latmax*$unit;
+        $latstd{$type}=$latstd*$unit;
+
+        $lat{$type}=$lat*$unit;
+        $unit{$type}=$unit;
         next;
     }
     #Starting 1 process
@@ -324,7 +307,12 @@ while (my $line = <STDIN>) {
 
     if ( $CLAT == 1 ) {
         if ( $line =~ m/\|/ ) {
-             if ( $line =~ m/95.00th/ ) {
+            my $parse = $line;
+            while ( $parse =~ m/([\d\.]+)th=\[\s*(\d+)\](.*)/ ) {
+                $clat{$type}{$1}=$2;
+                $parse = $3;
+            }
+            if ( $line =~ m/95.00th/ ) {
                 $clat95_00 = $line;
                 $clat95_00 =~ s/.*95.00th=\[//;
                 $clat95_00 =~ s/\],.*//;
@@ -431,19 +419,21 @@ while (my $line = <STDIN>) {
     }
 }
 
+if ( $benchmark eq "write" ) {
+    $type="write" ;
+    $dtype="W" ;
+}
+else {
+    $type="read" ;
+    $dtype="R" ;
+}
+
+
 if ( $rplots == 0 ) {
     hist_head;
     printf("%8s", $benchmark);
     printf("%6s", $users);
     printf("%5s", $bs);
-    if ( $benchmark eq "write" ) {
-        $type="write" ;
-        $dtype="W" ;
-    }
-    else {
-        $type="read" ;
-        $dtype="R" ;
-    }
     if ( $iops{$type} > 0 ) {
         printf(" %-1.1s", $type);
         printf("%9.3f", $throughput{$type}/1048576);
@@ -466,8 +456,9 @@ if ( $rplots == 0 ) {
     }
 
     if ( $percentiles == 1 ) {
-        foreach $percent ( $clat95_00, $clat99_00 ,$clat99_50 ,$clat99_90 ,$clat99_95 ,$clat99_99 ) {
-            printf(" %8.3f",$percent*$clat_mult);
+        foreach $percent ( @clat_class ) {
+            $value = $clat{$type}{$percent};
+            printf(" %8.3f",$value*$clat_mult);
         }
     }
 
@@ -492,14 +483,6 @@ if ( $rplots == 0 ) {
 }
 elsif( $rplots == 1 ) {
     if ($users > 0 ) {
-        if ( $benchmark eq "write" ) {
-            $type="write" ;
-            $dtype="W" ;
-        }
-        else {
-            $type="read" ;
-            $dtype="R" ;
-        }
         if ( $outputrows > 0 ) {
             if ( $labels == 1 ) {
                 printf("m <- rbind(m,data.frame(");
@@ -542,22 +525,29 @@ elsif( $rplots == 1 ) {
         $rplot_hist = 1;
         print_hist;
         $rplot_hist = 0;
-        foreach $percent ( $clat95_00, $clat99_00 ,$clat99_50 ,$clat99_90 ,$clat99_95 ,$clat99_99 ) {
-            printf(",%5.3f",$percent*$clat_mult);
+        if ( $percentiles == 1 ) {
+            foreach $percent ( @clat_class ) {
+                $value = $clat{$type}{$percent};
+                if($labels == 1) {
+                    $label = $percent;
+                    $label =~ s/\./_/;
+                    $label = "p".$label."=";
+                }
+                else {
+                    $label="";
+                }
+                printf(",%s%5.3f",$label,$value*$clat_mult);
+            }
         }
         if ( $outputrows > 0 && $labels == 1 ) { printf(")"); }
-        if ( $lables == 1 ) { printf(")"); }
+        if ( $labels == 1 ) { printf(")"); }
         printf("\n");
         $outputrows++;
 
     }
-    if ( $lables != 1 ) {
-        if ( $percentiles == 1 ) {
-            printf("),nrow=31)\n");
-        }
-        else {
-            printf("),nrow=25)\n");
-        }
+    if ( $labels != 1 ) {
+        $nrow = $percentiles == 1? 31 : 25;
+        printf("),nrow=%d)\n", $nrow);
         printf("tm <- t(m)\n");
         printf("m <-tm\n");
         printf("colnames <- c(\"name\",\"users\",\"bs\",\"MB\",\"lat\",\"min\",\"max\",\"std\",\"iops\"\n");
@@ -569,8 +559,5 @@ elsif( $rplots == 1 ) {
         printf(")\n");
         printf("colnames(m)=colnames\n");
         printf("m <- data.frame(m)\n");
-        printf("testtype <- \"%s\"\n",$ENV{'TESTNAME'});
     }
 }
-
-printf("at end\n") if defined ($debug);
