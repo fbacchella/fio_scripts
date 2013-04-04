@@ -17,7 +17,6 @@ print "continuting ... \n" if defined ($debug);
 # these are all the possible buckets for fio histograms:
 @buckets_fio=("4","10","20","50","100","250","500","750","1000","2000","4000","10000","20000","50000","100000","250000","500000","750000","1000000","2000000","20000000");
 
-
 # translation of fio buckets into labels
 $buckett{4}="4us";
 $buckett{10}="10us";
@@ -68,7 +67,17 @@ $bucketr{20000000}="s2g";
 
 # not used now, just print out a static header
 sub hist_head {
-    printf("test users size MB/s ms IOPS ");
+    printf("%8s", "test");
+    printf("%6s", "users");
+    printf("%5s", "size");
+    printf(" %-1.1s", " ");
+    printf("%9s",  "MB    ");
+    printf("%9s", "lat    ");
+    printf("%9s", "min    ");
+    printf("%9s", "max    ");
+    printf("%9s", "std    ");
+    printf("%8s", "IO/s");
+     #printf("test users size MB/s ms IOPS ");
     my ($time);
     printf(" ");
     foreach $time (@buckets_fio) {
@@ -429,18 +438,12 @@ while (my $line = <STDIN>) {
             }
         }
     }
+} # end of STDIN
 
-    #
-    # PRINTING OUT
-    #
-
-
-
-    if ( $line =~ m/END/ ) {
         if ( $rplots == 0 ) {
-            #hist_head;
+    hist_head;
             printf("%8s", $benchmark);
-            printf("%3s", $users);
+    printf("%6s", $users);
             printf("%5s", $bs);
             if ( $benchmark eq "write" ) {
                 $type="write" ;
@@ -531,10 +534,9 @@ while (my $line = <STDIN>) {
             $dtrace_secs="";
             $dtrace_avglat="";
 
-            } # end rplots = 0
-
-            if( $rplots == 1 ) {
-                if ( $line =~ m/END/ && $users > 0 ) {
+}
+elsif( $rplots == 1 ) {
+    if ($users > 0 ) {
                     if ( $benchmark eq "write" ) {
                         $type="write" ;
                         $dtype="W" ;
@@ -593,12 +595,7 @@ while (my $line = <STDIN>) {
                     printf("\n");
                     $outputrows++;
 
-            } # end line=END and users > 0
-        } # end rplots = 1
     }
-} # end of STDIN
-
-if( $rplots == 1 ) {
     if ( $lables != 1 ) {
         if ( $percentiles == 1 ) {
             printf("),nrow=31)\n");
