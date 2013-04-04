@@ -93,6 +93,24 @@ sub hist_head {
     printf("\n");
 }
 
+sub rplots_footer {
+    if($labels != 1) {
+        $nrow = $percentiles == 1? 31 : 25;
+        printf("),nrow=%d)\n", $nrow);
+        printf("tm <- t(m)\n");
+        printf("m <-tm\n");
+        printf("colnames <- c(\"name\",\"users\",\"bs\",\"MB\",\"lat\",\"min\",\"max\",\"std\",\"iops\"\n");
+        printf(", \"us50\",\"us100\",\"us250\",\"us500\",\"ms1\",\"ms2\",\"ms4\",\"ms10\",\"ms20\"\n");
+        printf(", \"ms50\",\"ms100\",\"ms250\",\"ms500\",\"s1\",\"s2\",\"s5\"\n");
+        if ( $percentiles == 1 ) {
+            printf(",\"p95_00\", \"p99_00\", \"p99_50\", \"p99_90\", \"p99_95\", \"p99_99\"\n");
+        }
+        printf(")\n");
+        printf("colnames(m)=colnames\n");
+        printf("m <- data.frame(m)\n");
+    }
+}
+
 sub print_hist {
     $mybucket=0;
 
@@ -135,7 +153,6 @@ sub print_hist {
     }
     else {
         foreach $curbucket (@{$bucket_list}) {
-            # printf("curbucket %s >=? %s \n",$curbucket, $output_buckets[$mybucket] );
             # output_buckets => the list of buckets to actually output
             # bucket_list => buckets possible for this data (fio or dtrace)
             # curbucket => is this bucket less the bucket to output? if so add it to
@@ -171,9 +188,142 @@ sub print_hist {
     }
 }
 
-$| = 1;
+sub flush_stat_line_simple {
+    printf("%8s", $benchmark);
+    printf("%6s", $users);
+    printf("%5s", $bs);
+    if ( $iops{$type} > 0 ) {
+        printf(" %-1.1s", $type);
+        printf("%9.3f", $throughput{$type}/1048576);
+        printf("%9.3f", $lat{$type}/1000);
 
-while (my $line = <STDIN>) {
+        printf("%9.3f", $latmin{$type}/1000);
+        printf("%9.3f", $latmax{$type}/1000);
+        printf("%9.3f", $latstd{$type}/1000);
+
+        printf("%8s", $iops{$type});
+    }
+    else {
+        printf("%27s ", "");
+    }
+    if ( $verbose == 1 ) {
+        $iop=100;
+        $hist_type="lat";
+        $bucket_list= "buckets_fio";
+        print_hist;
+    }
+
+    if ( $percentiles == 1 ) {
+        foreach $percent ( @clat_class ) {
+            $value = $clat{$type}{$percent};
+            printf(" %8.3f",$value*$clat_mult);
+        }
+    }
+
+    printf("\n");
+
+    $users="";
+    $benchmark="";
+    foreach $type ( keys %iops ) {
+        delete $throughput{$type};
+        delete $lat{$type};
+        delete $iops{$type};
+    }
+    $type="";
+    $benchmark="";
+    $users="";
+    $bs="";
+    $dtrace_avgsize="";
+    $dtrace_bytes="";
+    $dtrace_secs="";
+    $dtrace_avglat="";
+}
+
+sub flush_stat_line_rplots {
+    if ($users > 0 ) {
+        if ( $outputrows > 0 ) {
+            if ( $labels == 1 ) {
+                printf("m <- rbind(m,data.frame(");
+            }
+            else {
+                printf(",");
+            }
+        }
+        else {
+            printf("m <- NULL \n");
+            if ( $labels == 1 ) {
+                printf("m <- data.frame(");
+            }
+            else {
+                printf("m <- matrix(c(\n");
+            }
+        }
+        $label="";
+        if ( $labels == 1 ) { $label="name=";}
+        printf("%s%10s,", $label, "\"" . $benchmark . "\"") ;
+        if ( $labels == 1 ) { $label="users=";}
+        printf("%s%3s,", $label, $users);
+        if ( $labels == 1 ) { $label="bs=";}
+        printf("%s%6s,", $label, "\"" . $bs . "\"") ;
+        if ( $labels == 1 ) { $label="MB=";}
+        printf("%s%8.3f,", $label, $throughput{$type}/1048576);
+        if ( $labels == 1 ) { $label="lat=";}
+        printf("%s%9.3f,", $label, $lat{$type}/1000);
+        if ( $labels == 1 ) { $label="min=";}
+        printf("%s%4.1f,", $label, $latmin{$type}/1000);
+        if ( $labels == 1 ) { $label="max=";}
+        printf("%s%9d,", $label, $latmax{$type}/1000);
+        if ( $labels == 1 ) { $label="std=";}
+        printf("%s%7.1f,", $label, $latstd{$type}/1000);
+        if ( $labels == 1 ) { $label="iops=";}
+        printf("%s%5s", $label, $iops{$type});
+        $iop=100;
+        $hist_type="lat";
+        $bucket_list= "buckets_fio";
+        $rplot_hist = 1;
+        print_hist;
+        $rplot_hist = 0;
+        if ( $percentiles == 1 ) {
+            foreach $percent ( @clat_class ) {
+                $value = $clat{$type}{$percent};
+                if($labels == 1) {
+                    $label = $percent;
+                    $label =~ s/\./_/;
+                    $label = "p".$label."=";
+                }
+                else {
+                    $label="";
+                }
+                printf(",%s%5.3f",$label,$value*$clat_mult);
+            }
+        }
+        if ( $outputrows > 0 && $labels == 1 ) { printf(")"); }
+        if ( $labels == 1 ) { printf(")"); }
+        printf("\n");
+        $outputrows++;
+    }
+}
+
+sub flush_stat_line {
+    if ( $benchmark eq "write" ) {
+        $type="write" ;
+        $dtype="W" ;
+    }
+    else {
+        $type="read" ;
+        $dtype="R" ;
+    }
+
+    if ( $rplots == 0 ) {
+        flush_stat_line_simple
+    }
+    elsif( $rplots == 1 ) {
+        flush_stat_line_rplots
+    }
+}
+
+sub parse_line {
+    my ($line) = @_;
     chomp($line);
     printf("line: %s\n", $line) if defined ($debug);
     #job: (g=0): rw=randread, bs=8K-8K/8K-8K, ioengine=psync, iodepth=2
@@ -417,147 +567,19 @@ while (my $line = <STDIN>) {
             }
         }
     }
+    
+    if ($line =~ m/END/) {
+        flush_stat_line
+    }
+    
 }
 
-if ( $benchmark eq "write" ) {
-    $type="write" ;
-    $dtype="W" ;
+$| = 1;
+
+hist_head if ($rplots == 0);
+
+while (my $line = <STDIN>) {
+    parse_line($line);
 }
-else {
-    $type="read" ;
-    $dtype="R" ;
-}
 
-
-if ( $rplots == 0 ) {
-    hist_head;
-    printf("%8s", $benchmark);
-    printf("%6s", $users);
-    printf("%5s", $bs);
-    if ( $iops{$type} > 0 ) {
-        printf(" %-1.1s", $type);
-        printf("%9.3f", $throughput{$type}/1048576);
-        printf("%9.3f", $lat{$type}/1000);
-
-        printf("%9.3f", $latmin{$type}/1000);
-        printf("%9.3f", $latmax{$type}/1000);
-        printf("%9.3f", $latstd{$type}/1000);
-
-        printf("%8s", $iops{$type});
-    }
-    else {
-        printf("%27s ", "");
-    }
-    if ( $verbose == 1 ) {
-        $iop=100;
-        $hist_type="lat";
-        $bucket_list= "buckets_fio";
-        print_hist;
-    }
-
-    if ( $percentiles == 1 ) {
-        foreach $percent ( @clat_class ) {
-            $value = $clat{$type}{$percent};
-            printf(" %8.3f",$value*$clat_mult);
-        }
-    }
-
-    printf("\n");
-
-    $users="";
-    $benchmark="";
-    foreach $type ( keys %iops ) {
-        delete $throughput{$type};
-        delete $lat{$type};
-        delete $iops{$type};
-    }
-    $type="";
-    $benchmark="";
-    $users="";
-    $bs="";
-    $dtrace_avgsize="";
-    $dtrace_bytes="";
-    $dtrace_secs="";
-    $dtrace_avglat="";
-
-}
-elsif( $rplots == 1 ) {
-    if ($users > 0 ) {
-        if ( $outputrows > 0 ) {
-            if ( $labels == 1 ) {
-                printf("m <- rbind(m,data.frame(");
-            }
-            else {
-                printf(",");
-            }
-        }
-        else {
-            printf("m <- NULL \n");
-            if ( $labels == 1 ) {
-                printf("m <- data.frame(");
-            }
-            else {
-                printf("m <- matrix(c(\n");
-            }
-        }
-        $label="";
-        if ( $labels == 1 ) { $label="name=";}
-        printf("%s%10s,", $label, "\"" . $benchmark . "\"") ;
-        if ( $labels == 1 ) { $label="users=";}
-        printf("%s%3s,", $label, $users);
-        if ( $labels == 1 ) { $label="bs=";}
-        printf("%s%6s,", $label, "\"" . $bs . "\"") ;
-        if ( $labels == 1 ) { $label="MB=";}
-        printf("%s%8.3f,", $label, $throughput{$type}/1048576);
-        if ( $labels == 1 ) { $label="lat=";}
-        printf("%s%9.3f,", $label, $lat{$type}/1000);
-        if ( $labels == 1 ) { $label="min=";}
-        printf("%s%4.1f,", $label, $latmin{$type}/1000);
-        if ( $labels == 1 ) { $label="max=";}
-        printf("%s%9d,", $label, $latmax{$type}/1000);
-        if ( $labels == 1 ) { $label="std=";}
-        printf("%s%7.1f,", $label, $latstd{$type}/1000);
-        if ( $labels == 1 ) { $label="iops=";}
-        printf("%s%5s", $label, $iops{$type});
-        $iop=100;
-        $hist_type="lat";
-        $bucket_list= "buckets_fio";
-        $rplot_hist = 1;
-        print_hist;
-        $rplot_hist = 0;
-        if ( $percentiles == 1 ) {
-            foreach $percent ( @clat_class ) {
-                $value = $clat{$type}{$percent};
-                if($labels == 1) {
-                    $label = $percent;
-                    $label =~ s/\./_/;
-                    $label = "p".$label."=";
-                }
-                else {
-                    $label="";
-                }
-                printf(",%s%5.3f",$label,$value*$clat_mult);
-            }
-        }
-        if ( $outputrows > 0 && $labels == 1 ) { printf(")"); }
-        if ( $labels == 1 ) { printf(")"); }
-        printf("\n");
-        $outputrows++;
-
-    }
-    if ( $labels != 1 ) {
-        $nrow = $percentiles == 1? 31 : 25;
-        printf("),nrow=%d)\n", $nrow);
-        printf("tm <- t(m)\n");
-        printf("m <-tm\n");
-        printf("colnames <- c(\"name\",\"users\",\"bs\",\"MB\",\"lat\",\"min\",\"max\",\"std\",\"iops\"\n");
-        printf(", \"us50\",\"us100\",\"us250\",\"us500\",\"ms1\",\"ms2\",\"ms4\",\"ms10\",\"ms20\"\n");
-        printf(", \"ms50\",\"ms100\",\"ms250\",\"ms500\",\"s1\",\"s2\",\"s5\"\n");
-        if ( $percentiles == 1 ) {
-            printf(",\"p95_00\", \"p99_00\", \"p99_50\", \"p99_90\", \"p99_95\", \"p99_99\"\n");
-        }
-        printf(")\n");
-        printf("colnames(m)=colnames\n");
-        printf("m <- data.frame(m)\n");
-    }
-}
+rplots_footer if ($rplots == 1)
