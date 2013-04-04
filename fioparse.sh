@@ -26,10 +26,10 @@ EOF
 #
 AGRUMENTS=""
 VERBOSE=0
-DTRACE=0
 RPLOTS=0
 PERCENTILES=0
-while getopts .dhpR:vr. OPTION
+PERLPARSER=$(cd $(dirname $0) && pwd -P)/fioparse.pl
+while getopts .hp:vr:. OPTION
 do
      case $OPTION in
          h)
@@ -40,23 +40,11 @@ do
              ARGUMENTS="$ARGUMENTS verbose"
              VERBOSE=1
              ;;
-         d)
-             ARGUMENTS="$ARGUMENTS dtrace"
-             DTRACE=1
-             ;;
-         R)
-             ARGUMENTS="$ARGUMENTS rplots percentiles"
-             RPLOTS=1
-             PERCENTILES=1
-             export TESTNAME=$OPTARG
-             ;;
          r)
              ARGUMENTS="$ARGUMENTS rplots percentiles"
              RPLOTS=1
              PERCENTILES=1
-             echo "please enter a test  name:"
-             read TESTNAME
-             export TESTNAME=${TESTNAME:-"noname"}
+             TESTNAME=$OPTARG
              ;;
          p)
              ARGUMENTS="$ARGUMENTS percentiles"
@@ -70,24 +58,11 @@ do
 done
 shift $((OPTIND-1))
 
-# print header line
-
-if [ $RPLOTS -eq 0 ] ; then
-  echo -n "test  users size         MB       ms      min      max      std    IOPS"
-  if [ $VERBOSE -eq 1 ] ; then
-    echo  -n "    50us   1ms   4ms  10ms  20ms  50ms   .1s    1s    2s   2s+"
-  fi
-  if [ $PERCENTILES -eq 1 ] ; then
-    echo  -n "       95%      99%    99.5%    99.9%  99.95%    99.99%"
-  fi
-  echo " "
-fi
-
-
-
 for i in $*; do
   echo "filename=$i"
   cat $i 
   echo "END"
 done | \
-perl fioparse.pl $ARGUMENTS
+perl $PERLPARSER $ARGUMENTS
+[ -n "$TESTNAME" ] && printf 'testtype = "%s"\n' "$TESTNAME"
+

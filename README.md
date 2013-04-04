@@ -19,16 +19,10 @@ files in this project
 
 + fio.sh - run a set of I/O benchmarks using fio
 + fioparse.sh - parse the output files from fio.sh runs
-+ fio.r - create a function called graphit() in R
-+ fiog.r  - run graphit on different combinations of data from fioparse.sh
-+ fiop.r -  newer version of graphit that adds scaling info
-+ fiopg.r - use to graph with the newer graphit in fiop.r
-+ example data from fioparse.sh
++ fioparse.pl - used internally by fioparse.sh
++ fiop.r - create a function called graphit() in R
++ fiopg.r - run graphit on different combinations of data from fioparse.sh
 
-	> data_emc.r   
-	> data_ssd.r   
-	> data_pharos.r   
-	> data_mem.r   
 
 NOTE: the scripts in this project require that you have already
 downloaded fio and compiled a binary of fio.
@@ -115,7 +109,7 @@ set of statistics from the output files.
 The above output is for human consumption, but when run with "-r" the output
 will be given in R format:
 
-	./fioparse.sh -R onetest *out
+	./fioparse.sh -r onetest *out
 	
 	m <- NULL
 	m <- matrix(c(
@@ -151,6 +145,7 @@ will be given in R format:
 	)
 	colnames(m)=colnames
 	m <- data.frame(m)
+	testtype = "onetest"
 	
 
 Graphing in R
@@ -188,73 +183,19 @@ Start R and load up the above in R and it creates the dataframe "m"
 In R we can now source "fiop.r" which creates a function "graphit(m)"
 
 	source("fiop.r")       # create the graphit() function
-    m <- read.csv("data_ssd.csv")
-	                       # load some fio data, data_ssd.r is provided in github distro
-	testtype = "nyl"
-	dir =  "/tmp/truc/"
+    source("data.r")       # load some fio data, generated using fioparse.sh
+	dir =  "/tmp/"         # set the output directorie for the png
 	source("fiopg.r")      # this will graph various combinations and save the png files 
 	                       # to /tmp/
 	                       # the graphs will be for readrand, read and write tests
 	                       # the graphs will graph different user loads and I/O sizes in the data
 
-By default it will graph 8K random reads.
-If you source "fiog.r" it will run through a series of different combinations graphing them and saving the output.
-The output is save to png files in the directory  /tmp/
-
-Example data files are included
-
-* data_emc.r
-* data_ssd.r
-* data_pharos.r
-* data_mem.r
-
-collected from different systems. The EMC data is one single spindle. The pharos data is striped but
-shared filer. THe ssd data is from two striped SSD devices. The mem data is from using /tmp where /tmp
-is a memory filesystem.
-In order to graph these datasets, simple source them
-
-	source("data_ssd.r")
-
-Then graph them
-
-	source("fiog.r")
-
-NOTE: to source files they have to be in R's working directory.
-You can get the working directory with
-
-	getwd()
-
-you can set working directory with
-
-	setwd("C:\\Temp\\")
-
-for example to set it to C:\Temp
+It will run through a series of different combinations graphing them and saving the output.
+The output is save to png files in the directory  specified with 'dir'
 
 GRAPH Examples:	
 
 https://sites.google.com/site/oraclemonitor/i-o-graphics#TOC-Percentile-Latency
-
-
-Running fiop.r and fiopg.r
------------------------------------------------
-new set of graphs with fiop.r version of graphit(). Use fiopg.r to create a set of graphs from a data set.
-for example
-
-	source("fiop.r")
-	source("data_emc.r")
-	source("fiopg.r")
-
-NOTE: to source files they have to be in R's working directory.
-You can get the working directory with
-
-	getwd()
-
-you can set working directory with
-
-	setwd("C:\\Temp\\")
-
-for example to set it to C:\Temp
-
 
 Each PNG file will have 3 graphs
 
