@@ -10,9 +10,6 @@ foreach $argnum (0 .. $#ARGV) {
 }
 print "continuting ... \n" if defined ($debug);
 
-# these are all the possible buckets for dtrace
-@buckets_dtrace=("1", "2", "4", "8", "16", "32", "64", "128", "256", "512", "1024", "2048", "4096", "8192", "16384", "32768", "65536", "131072", "262144", "524288", "1048576", "2097152", "4194304", "8388608", "16777216", "33554432");
-
 # these are all the possible buckets for fio histograms:
 @buckets_fio=("4","10","20","50","100","250","500","750","1000","2000","4000","10000","20000","50000","100000","250000","500000","750000","1000000","2000000","20000000");
 
@@ -233,10 +230,6 @@ sub flush_stat_line_simple {
     $benchmark="";
     $users="";
     $bs="";
-    $dtrace_avgsize="";
-    $dtrace_bytes="";
-    $dtrace_secs="";
-    $dtrace_avglat="";
 }
 
 sub flush_stat_line_rplots {
@@ -505,66 +498,6 @@ sub parse_line {
             printf("clat unit :%s: unknown\n",$clat_unit);
             printf("exiting \n");
             exit;
-        }
-    }
-
-    # important for the follwoing dtrace lines, get rid of spaces and tabs
-    $line=~ s/[ ][ ]/,/;
-    $line =~ s/[ ][ ]*//g;
-
-    if ( $line =~ m/dtrace_secs/ ) {
-        ($type, $value)=split(",",$line);
-        $dtrace_secs=$value;
-    }
-    if ( $line =~ m/dtrace_avgsize/ ) {
-        ($dtrace_io_type,$type, $value)=split(",",$line);
-        $dtrace_avgsize{$dtrace_io_type}=$value;
-    }
-    if ( $line =~ m/dtrace_bytes/ ) {
-        ($dtrace_io_type,$type, $value)=split(",",$line);
-        $dtrace_bytes{$dtrace_io_type}=$value;
-    }
-    if ( $line =~ m/dtrace_avglat/ ) {
-        ($dtrace_io_type,$type, $value)=split(",",$line);
-        $value =~ s/[ ][ ]*//g;
-        $value =~ s/ *//g;
-        $dtrace_avglat{$dtrace_io_type}=$value;
-    }
-    if ( $line =~ m/dtrace_iop/ ) {
-        ($dtrace_io_type,$type, $value)=split(",",$line);
-        $dtrace_iop{$dtrace_io_type}=$value;
-    }
-
-    if ( $line =~ m/dtrace_size_start/ ) { $dtrace_size=1; }
-    if ( $line =~ m/size_distribution/ ) { ($dtrace_io_type, $value)=split(",",$line);}
-    if ( $line =~ m/dtrace_size_end/ ) { $dtrace_size=0; }
-
-    if ( $line =~ m/dtrace_latency_start/ ) { $dtrace_latency=1; }
-    if ( $line =~ m/latency_distribution/ ) { ($dtrace_io_type, $value)=split(",",$line);}
-    if ( $line =~ m/dtrace_latency_end/ ) { $dtrace_latency=0; }
-
-    if ( $line =~ m/\|/ ) {
-        $line=~ s/\|@*/,/;
-        $line =~ s/ *//g;
-        if ( $dtrace_size == 1 ) {
-            ($bucket, $value)=split(",",$line);
-            $size{$dtrace_io_type,$bucket}=$val;
-        }
-        # 128, 0
-        # 256 , 1
-        # 512 , 23
-        # 1024 ,8
-        # 2048 ,2
-        if ( $dtrace_latency == 1 ) {
-            ($bucket, $value)=split(",",$line);
-            if ( $dtrace_io_type eq "W" ) {
-                $dtrace_lat_w{$bucket}=$value;
-                if ( $bucket > $max_dtrace_w_bucket ) { $max_dtrace_w_bucket = $bucket }
-            }
-            if ( $dtrace_io_type eq "R" ) {
-                $dtrace_lat_r{$bucket}=$value;
-                if ( $bucket > $max_dtrace_r_bucket ) { $max_dtrace_r_bucket = $bucket }
-            }
         }
     }
     
