@@ -9,60 +9,6 @@
 #        when opensolaris is the NFS client
 #
 
-
-# record size to use when creating a ZFS filesystem
-RECORDSIZE=128k
-RECORDSIZE=8k
-
-# caching to use when creating a ZFS filesystem, 
-# metadata means only cache metadata and not file data
-PRIMARYCACHE=metadata
-SECONDARYCACHE=metadata
-
-# to use compression or not when creating a ZFS filesystem
-COMPRESSION=on
-COMPRESSION=off
-
-# by default use DIRECT I/O
-DIRECT=1
-# by default  don't initialize raw devices with writes
-INITIALIZE=0
-# by default  don't remove the data file after the tests
-REMOVE=0
-BINARY="$(type -p fio)"
-DIRECTORY=""
-OUTPUT="/tmp"
-TESTS="all"
-SECS="60"
-MEGABYTES="65536"
-# by default  don't force the run, ie prompt for confirmations
-FORCE="n"
-CREATE=0
-
-# whether to execute commands, EVAL=0 would turn
-# command execution off for debuggion
-EVAL=1
-
-CUSTOMUSERS=-1
-CUSTOMBLOCKSIZE=-1
-FILE=fiodata
-FILENAME="filename=$FILE"
-RAW=0
-
-DTRACE=0
-DTRACE1=""
-DTRACE2=""
-
-MULTIUSERS="01 08 16 32 64"
-READSIZES="0008 0032 0128"
-SEQREADSIZES="0128 1024"
-SEQREADSIZES="1024"
-
-WRITESIZES="0001 0004 0008 0016 0032 0064 0128"
-MULTIWRITEUSERS="01 02 04 08 16"
-WRITESIZES="0001 0008 0128"
-MULTIWRITEUSERS="01 04 16"
-
 usage()
 {
 cat << EOF
@@ -72,7 +18,7 @@ run a set of I/O benchmarks
 
 OPTIONS:
    -h              Show this message
-   -d  [1|0]       do/don't directio
+   -d  [1|0]       do/don\'t directio
    -b  binary      name of fio binary, defaults to fio
    -w  directory   work directory where fio creates a fio and reads and writes, no default
    -o  directory   output directory, where to put output files, defaults to ./
@@ -99,90 +45,6 @@ OPTIONS:
                   fio.sh -b ./fio.opensolaris -w /domain0/fiotest  -t rand_read -s 10 -m 1000 -f
 EOF
 }
-
-while getopts d:hz:ycb:nr:xe:d:o:it:s:l:u:m:w: OPTION
-do
-     case $OPTION in
-         h)
-             usage
-             exit 1
-             ;;
-         d)  DIRECT=$OPTARG
-             ;;
-         b)
-             BINARY=$OPTARG
-             ;;
-         w)
-             DIRECTORY=$OPTARG
-             ;;
-         o)
-             OUTPUT=$OPTARG
-             ;;
-         e)
-             RECORDSIZE="${OPTARG}k"
-             ;;
-         r)
-             FILENAME="filename=$OPTARG"
-             RAWNAME="$OPTARG"
-             DIRECTORY="/"
-             RAW=1
-             ;;
-         i)
-             FILENAME=""
-             ;;
-         u)
-             CUSTOMUSERS=$OPTARG
-             ;;
-         l)
-             CUSTOMBLOCKSIZE=$OPTARG
-             ;;
-         s)
-             SECS=$OPTARG
-             ;;
-         m)
-             MEGABYTES=$OPTARG
-             #echo "MEGABYTES=$MEGABYTES"
-             MB=1
-             ;;
-         d)
-             DTRACE=1
-             ;;
-         f)
-             FORCE=1
-             ;;
-         c)
-             CREATE=1
-             ;;
-         t)
-             TESTS=$OPTARG
-             ;;
-         x)
-             REMOVE=1
-             ;;
-         y)
-             INITIALIZE=1
-             ;;
-         z)
-             RAWSIZES=$OPTARG
-             ;;
-         ?)
-             usage
-             exit
-             ;;
-     esac
-done
-
-if [ -z "$DIRECTORY" -o ! -d "$DIRECTORY" ] ; then
-    usage
-    echo "bad run directory given: '$DIRECTORY'"
-    exit 1
-fi
-
-if [ -z "$OUTPUT" -o ! -d "$OUTPUT" ] ; then
-    usage
-    echo "bad output directory given: '$OUTPUT'"
-    exit 1
-fi
 
 dtrace_begin() {
 cat << EOF
@@ -304,6 +166,279 @@ offsets()
      done
 }
 
+#following functions 
+#    init
+#    read
+#    write
+#    randread
+#    randrw
+# create the fio job files
+# init is always used to initialize the job file 
+# with the default information
+# then the other funtions are called to add in test
+# specific lines
+
+
+# took time_based out because
+# it made sequential read fail with offsets
+#
+# time_based=1
+function init
+{
+    for i in 1 ; do
+        cat << EOF
+[global]
+$SIZE
+$FILENAME
+directory=$DIRECTORY
+direct=$DIRECT
+runtime=$SECS
+randrepeat=0
+end_fsync=1
+group_reporting=1
+ioengine=psync
+fadvise_hint=0
+EOF
+    done > $JOBFILE
+}
+
+# read/write randomm, set block size, vary #  users
+function randrw {
+    for i in 1 ; do
+        cat << EOF
+[job]
+rw=randrw
+rwmixread=80
+bs=8k
+sync=0
+numjobs=$USERS
+EOF
+    done >> $JOBFILE
+}
+
+# read sequential, vary both blocksizes and # of users
+function read {
+    for i in 1 ; do
+        cat << EOF
+[job$JOBNUMBER]
+rw=read
+bs=${READSIZE}k
+numjobs=1
+offset=$OFFSET
+EOF
+    done >> $JOBFILE
+}
+
+
+# read random, set blocksize, vary # of  users
+function readrand {
+    for i in 1 ; do
+        cat << EOF
+[job$JOBNUMBER]
+rw=randread
+bs=8k
+numjobs=1
+offset=$OFFSET
+EOF
+    done >> $JOBFILE
+}
+
+# write sync, set 1 user, vary blocksizes
+function write {
+    for i in 1 ; do
+        cat << EOF
+[job$JOBNUMBER]
+rw=write
+bs=${WRITESIZE}k
+numjobs=1
+offset=$OFFSET
+sync=1
+direct=0
+EOF
+    done >> $JOBFILE
+}
+
+initialize()
+{
+    echo ""
+    echo "creating 10 MB  seed file of random data"
+    echo ""
+    $DD if=/dev/urandom of=/tmp/fio.$$ bs=512 count=20480
+    echo ""
+    echo "creating $MB_per_LUN MB of random data on $rawdev"
+    echo ""
+    let TENMEGABYTES=$MB_per_LUN/10
+    let TENMEGABYTES=$TENMEGABYTES-1
+    linesize=60
+    characters=0
+    loops=1
+    BEG=$(date +%s)
+    while [[ $loops -le $TENMEGABYTES ]] ; do  # {
+       let seek=$loops*10
+       cmd="$DD if=/tmp/fio.$$ of=${outfile} bs=1024k seek=$seek count=10 > /tmp/fio.dd.out 2>&1"
+     # was the command for file
+     # cmd="$DD if=/tmp/fio.$$ of=${outfile} bs=1024k oflag=append conv=notrunc count=1 > /tmp/fio.dd.out 2>&1"
+       eval $cmd
+       RET=$?
+       if [ $RET -eq 0 ] ; then # {
+          echo -n "."
+          characters=$(expr $characters + 1)
+          if [ $characters -gt $linesize ] ; then # {
+            END=`date +%s`
+            let DELTA=$END-$BEG
+            let MB_LEFT=$MB_per_LUN-$seek
+            let MB_PER_SEC=($linesize*10)/$DELTA
+            let SECS_LEFT=$MB_LEFT/$MB_PER_SEC
+            echo " $MB_LEFT MB remaining  $MB_PER_SEC MB/s $SECS_LEFT seconds left"
+            characters=0
+            BEG=`date +%s`
+          fi  # }
+       else
+          echo "RET:$RET:"
+          cat /tmp/fio.dd.out
+       fi # }
+       loops=$(expr $loops + 1)
+    done   #  }
+    rm /tmp/fio.dd.out
+}
+
+# record size to use when creating a ZFS filesystem
+RECORDSIZE=128k
+RECORDSIZE=8k
+
+# caching to use when creating a ZFS filesystem, 
+# metadata means only cache metadata and not file data
+PRIMARYCACHE=metadata
+SECONDARYCACHE=metadata
+
+# to use compression or not when creating a ZFS filesystem
+COMPRESSION=on
+COMPRESSION=off
+
+# by default use DIRECT I/O
+DIRECT=1
+# by default  don't initialize raw devices with writes
+INITIALIZE=0
+# by default  don't remove the data file after the tests
+REMOVE=0
+BINARY="$(type -p fio)"
+DIRECTORY=""
+OUTPUT="/tmp"
+TESTS="all"
+SECS="60"
+MEGABYTES="65536"
+# by default  don't force the run, ie prompt for confirmations
+FORCE="n"
+CREATE=0
+
+# whether to execute commands, EVAL=0 would turn
+# command execution off for debuggion
+EVAL=1
+
+CUSTOMUSERS=-1
+CUSTOMBLOCKSIZE=-1
+FILE=fiodata
+FILENAME="filename=$FILE"
+RAW=0
+
+DTRACE=0
+DTRACE1=""
+DTRACE2=""
+
+MULTIUSERS="01 08 16 32 64"
+READSIZES="0008 0032 0128"
+SEQREADSIZES="0128 1024"
+SEQREADSIZES="1024"
+
+WRITESIZES="0001 0004 0008 0016 0032 0064 0128"
+MULTIWRITEUSERS="01 02 04 08 16"
+WRITESIZES="0001 0008 0128"
+MULTIWRITEUSERS="01 04 16"
+
+while getopts d:hz:ycb:nr:xe:d:o:it:s:l:u:m:w: OPTION
+do
+     case $OPTION in
+         h)
+             usage
+             exit 1
+             ;;
+         d)  DIRECT=$OPTARG
+             ;;
+         b)
+             BINARY=$OPTARG
+             ;;
+         w)
+             DIRECTORY=$OPTARG
+             ;;
+         o)
+             OUTPUT=$OPTARG
+             ;;
+         e)
+             RECORDSIZE="${OPTARG}k"
+             ;;
+         r)
+             FILENAME="filename=$OPTARG"
+             RAWNAME="$OPTARG"
+             DIRECTORY="/"
+             RAW=1
+             ;;
+         i)
+             FILENAME=""
+             ;;
+         u)
+             CUSTOMUSERS=$OPTARG
+             ;;
+         l)
+             CUSTOMBLOCKSIZE=$OPTARG
+             ;;
+         s)
+             SECS=$OPTARG
+             ;;
+         m)
+             MEGABYTES=$OPTARG
+             #echo "MEGABYTES=$MEGABYTES"
+             MB=1
+             ;;
+         d)
+             DTRACE=1
+             ;;
+         f)
+             FORCE=1
+             ;;
+         c)
+             CREATE=1
+             ;;
+         t)
+             TESTS=$OPTARG
+             ;;
+         x)
+             REMOVE=1
+             ;;
+         y)
+             INITIALIZE=1
+             ;;
+         z)
+             RAWSIZES=$OPTARG
+             ;;
+         ?)
+             usage
+             exit
+             ;;
+     esac
+done
+
+if [ -z "$DIRECTORY" -o ! -d "$DIRECTORY" ] ; then
+    usage
+    echo "bad run directory given: '$DIRECTORY'"
+    exit 1
+fi
+
+if [ -z "$OUTPUT" -o ! -d "$OUTPUT" ] ; then
+    usage
+    echo "bad output directory given: '$OUTPUT'"
+    exit 1
+fi
+
 # if there is no filename specified
 # fio will generate a file per processes (name generated by fio) 
 # each generated file will get the same size 
@@ -358,6 +493,10 @@ echo "    recordsize=$RECORDSIZE"
 echo "    filename (blank if multiple files)=\"$FILENAME\""
 echo "    size per file of multiple files=\"$SIZE\""
 
+if [ ! -x "$BINARY" ] ; then
+    echo "no fio command"
+    exit 1
+fi
 
 # if running on Delphix and not using RAW LUNs, ie using /domain0
 if [ -f /etc/delphix/version ] && [ $RAW -eq 0 ] ; then 
@@ -449,51 +588,6 @@ if [ -f /etc/delphix/version ]  ; then  # {
 fi # } end if on delphix
 
 
-initialize()
-{
-    echo ""
-    echo "creating 10 MB  seed file of random data"
-    echo ""
-    #$DD if=/dev/urandom of=/tmp/fio.$$ bs=512 count=20480
-    $DD if=/dev/urandom of=/tmp/fio.$$ bs=512 count=20480
-    echo ""
-    echo "creating $MB_per_LUN MB of random data on $rawdev"
-    echo ""
-    let TENMEGABYTES=$MB_per_LUN/10
-    let TENMEGABYTES=$TENMEGABYTES-1
-    linesize=60
-    characters=0
-    loops=1
-    BEG=$(date +%s)
-    while [[ $loops -le $TENMEGABYTES ]] ; do  # {
-       let seek=$loops*10
-       cmd="$DD if=/tmp/fio.$$ of=${outfile} bs=1024k seek=$seek count=10 > /tmp/fio.dd.out 2>&1"
-     # was the command for file
-     # cmd="$DD if=/tmp/fio.$$ of=${outfile} bs=1024k oflag=append conv=notrunc count=1 > /tmp/fio.dd.out 2>&1"
-       eval $cmd
-       RET=$?
-       if [ $RET -eq 0 ] ; then # {
-          echo -n "."
-          characters=$(expr $characters + 1)
-          if [ $characters -gt $linesize ] ; then # {
-            END=`date +%s`
-            let DELTA=$END-$BEG
-            let MB_LEFT=$MB_per_LUN-$seek
-            let MB_PER_SEC=($linesize*10)/$DELTA
-            let SECS_LEFT=$MB_LEFT/$MB_PER_SEC
-            echo " $MB_LEFT MB remaining  $MB_PER_SEC MB/s $SECS_LEFT seconds left"
-            characters=0
-            BEG=`date +%s`
-          fi  # }
-       else
-          echo "RET:$RET:"
-          cat /tmp/fio.dd.out
-       fi # }
-       loops=$(expr $loops + 1)
-    done   #  }
-    rm /tmp/fio.dd.out
-}
-
 # example variable values for INITIALIZE
 # RAWSIZES="9216:9216"
 # RAWNAME="/dev/rdsk/c4t3d0p0:/dev/rdsk/c4t4d0p0"
@@ -551,99 +645,6 @@ if [ $RAW -eq 0 ]; then
    eval $cmd | sed -e 's/^/   /'
 fi
 
-# following functions 
-#    init
-#    read
-#    write
-#    randread
-#    randrw
-# create the fio job files
-# init is always used to initialize the job file 
-# with the default information
-# then the other funtions are called to add in test
-# specific lines
-
-
-# took time_based out because
-# it made sequential read fail with offsets
-#
-# time_based=1
-function init
-{
-for i in 1 ; do
-cat << EOF
-[global]
-$SIZE
-$FILENAME
-directory=$DIRECTORY
-direct=$DIRECT
-runtime=$SECS
-randrepeat=0
-end_fsync=1
-group_reporting=1
-ioengine=psync
-fadvise_hint=0
-EOF
-done > $JOBFILE
-}
-
-# read/write randomm, set block size, vary #  users
-function randrw {
-for i in 1 ; do
-cat << EOF
-[job]
-rw=randrw
-rwmixread=80
-bs=8k
-sync=0
-numjobs=$USERS
-EOF
-done >> $JOBFILE
-}
-
-# read sequential, vary both blocksizes and # of users
-function read {
-for i in 1 ; do
-cat << EOF
-[job$JOBNUMBER]
-rw=read
-bs=${READSIZE}k
-numjobs=1
-offset=$OFFSET
-EOF
-done >> $JOBFILE
-}
-
-
-# read random, set blocksize, vary # of  users
-function readrand {
-for i in 1 ; do
-cat << EOF
-[job$JOBNUMBER]
-rw=randread
-bs=8k
-numjobs=1
-offset=$OFFSET
-EOF
-done >> $JOBFILE
-}
-
-# write sync, set 1 user, vary blocksizes
-function write {
-for i in 1 ; do
-cat << EOF
-[job$JOBNUMBER]
-rw=write
-bs=${WRITESIZE}k
-numjobs=1
-offset=$OFFSET
-sync=1
-direct=0
-EOF
-done >> $JOBFILE
-}
-
-echo " "
 echo " "
 for job in $jobs; do # {
   # default values if thet don't get set otherwise
@@ -761,18 +762,18 @@ for job in $jobs; do # {
   fi
 done  # }
 # if we are asked to remove the work file and we are not using RAW, then rm work file
-if [ $REMOVE == 1 ]  && [ $RAW == 0 ] ; then  # {
-    cmd="rm  $DIRECTORY/$FILE "
+if [ $REMOVE == 1 ]  && [ $RAW == 0 ] ; then
+    cmd="rm $DIRECTORY/$FILE "
     echo "cmd=$cmd"
     eval $cmd
-fi # }
-./fioparse.sh  $OUTPUT/*out  > $OUTPUT/fio_summary.out 
-./fioparse.sh -R $(uname -n) $OUTPUT/*out  > $OUTPUT/fio_summary.r 
+fi
+./fioparse.sh $OUTPUT/*out > $OUTPUT/fio_summary.out 
+./fioparse.sh -r $(uname -n) $OUTPUT/*out  > $OUTPUT/fio_summary.r 
 cat $OUTPUT/fio_summary.out
 cat << __EOF__ > $OUTPUT/plot.r
-R --no-save
 source("fiop.r")
 source("$OUTPUT/fio_summary.r")
 dir =  "$OUTPUT"
 source("fiopg.r")
 __EOF__
+R --no-save -f $OUTPUT/plot.r
