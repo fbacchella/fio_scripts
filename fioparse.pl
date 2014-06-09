@@ -11,9 +11,10 @@ foreach $argnum (0 .. $#ARGV) {
 print "continuting ... \n" if defined ($debug);
 
 # these are all the possible buckets for fio histograms:
-@buckets_fio=("4","10","20","50","100","250","500","750","1000","2000","4000","10000","20000","50000","100000","250000","500000","750000","1000000","2000000","20000000");
+@buckets_fio=("2", "4","10","20","50","100","250","500","750","1000","2000","4000","10000","20000","50000","100000","250000","500000","750000","1000000","2000000","20000000");
 
 # translation of fio buckets into labels
+$buckett{2}="2us";
 $buckett{4}="4us";
 $buckett{10}="10us";
 $buckett{20}="20us";
@@ -36,6 +37,7 @@ $buckett{1000000}="1s";
 $buckett{2000000}="2s";
 $buckett{20000000}="2s+";
 
+$bucketr{2}="us2";
 $bucketr{4}="us4";
 $bucketr{10}="us10";
 $bucketr{20}="us20";
@@ -59,7 +61,7 @@ $bucketr{2000000}="s2";
 $bucketr{20000000}="s2g";
 
 @output_buckets=("50","1000","4000","10000","20000","50000","100000","1000000","2000000","20000000");
-@rbuckets_fio=("4","100","250","500","1000","2000","4000","10000","20000","50000","100000","250000","500000","1000000","2000000","20000000");
+@rbuckets_fio=("2","4","10", "20", "50", "100","250","500","1000","2000","4000","10000","20000","50000","100000","250000","500000","1000000","2000000","20000000");
 @percentiles_header=("95%", "99%", "99.5%", "99.9%", "99.95%", "99.99%");
 # clat of interest
 @clat_class = ("95.00", "99.00", "99.50", "99.90", "99.95", "99.99");
@@ -110,19 +112,21 @@ sub rplots_footer {
 
 sub print_hist {
     $mybucket=0;
-
     # for all possible fo buckets, @buckets_fio is all known fio histogram buckets
     if ( $rplot_hist == 1 ) {
         foreach $curbucket (@rbuckets_fio) {
+            #print "\n$curbucket\n";
             $label="";
-            if ($curbucket eq "4" ) {
+            if ($curbucket eq "2" ) {
                 if ( $labels == 1 ) {
                     $label="us50=";
                 }
-                printf(",%s%2d",$label, int(${$hist_type}{$curbucket} + ${$hist_type}{"10"} + ${$hist_type}{"20"} + ${$hist_type}{"50"})||0 );
-                delete ${$hist_type}{"10"};
-                delete ${$hist_type}{"20"};
-                delete ${$hist_type}{"50"};
+                printf("%s%2d",$label, int(${$hist_type}{"2"} + ${$hist_type}{"4"} + ${$hist_type}{"10"} + ${$hist_type}{"20"} + ${$hist_type}{"50"})||0 );
+                ${$hist_type}{"2"} = -1;
+                ${$hist_type}{"4"} = -1;
+                ${$hist_type}{"10"} = -1;
+                ${$hist_type}{"20"} = -1;
+                ${$hist_type}{"50"} = -1;
             }
             elsif ( $curbucket eq "1000" ) {
                 if ( $labels == 1 ) {
@@ -142,8 +146,11 @@ sub print_hist {
                 printf(",%s%2d",$label, int(${$hist_type}{$curbucket})||0 );
             }
             else {
-                if ( $labels == 1 ) { $label=$bucketr{$curbucket}."="; }
-                printf(",%s%2d",$label, int(${$hist_type}{$curbucket})||0 );
+                $value = int(${$hist_type}{$curbucket})||0;
+                if ( $value >= 0) {
+                    if ( $labels == 1 ) { $label=$bucketr{$curbucket}."="; }
+                    printf(",%s%2d",$label,  );   
+                }
             }
             delete ${$hist_type}{$curbucket};
         }
@@ -325,7 +332,7 @@ sub parse_line {
         $dir =~ s/filename=//;
         $dir =~ s/\/.*//;
     }
-    if ( $line =~ m/ioengine/ ) {
+    if ( $line =~ m/ ioengine=/ ) {
         $bs=$benchmark=$line;
         $benchmark =~ s/.* rw=//;
         $benchmark =~ s/,.*//;
@@ -335,7 +342,7 @@ sub parse_line {
     }
     # READ: io=48216KB, aggrb=802KB/s, minb=822KB/s, maxb=822KB/s, mint=60052msec, maxt=60052msec
     # WRITE: io=12256KB, aggrb=204KB/s, minb=208KB/s, maxb=208KB/s, mint=60052msec, maxt=60052msec
-    if ( $line =~ m/aggrb/ ) {
+    if ( $line =~ m/ aggrb=/ ) {
         $type=$throughput=$line;
         $type =~ s/:.*//;
         $type =~ s/[ ][ ]*//;
@@ -399,10 +406,11 @@ sub parse_line {
         next;
     }
     #Starting 1 process
-    if ( $line =~ m/Starting/ ) {
+    if ( $line =~ m/^Starting / ) {
         $users=$line;
         $users =~ s/Starting //;
         $users =~ s/ process.*//;
+        $users =~ s/ thread.*//;
         next;
     }
     # lat (usec): 4=97.56%, 10=1.10%, 20=0.09%, 50=0.03%, 100=0.01%

@@ -479,6 +479,12 @@ else
   jobs=$TESTS
 fi
 
+if [ ! -x "$BINARY" ] ; then
+    echo "no fio command"
+    exit 1
+fi
+
+
 echo "configuration: "
 echo "    binary=$BINARY"
 echo "    work directory=$DIRECTORY"
@@ -492,11 +498,6 @@ echo "    custom blocksize=$CUSTOMBLOCKSIZE"
 echo "    recordsize=$RECORDSIZE"
 echo "    filename (blank if multiple files)=\"$FILENAME\""
 echo "    size per file of multiple files=\"$SIZE\""
-
-if [ ! -x "$BINARY" ] ; then
-    echo "no fio command"
-    exit 1
-fi
 
 # if running on Delphix and not using RAW LUNs, ie using /domain0
 if [ -f /etc/delphix/version ] && [ $RAW -eq 0 ] ; then 
@@ -767,8 +768,21 @@ if [ $REMOVE == 1 ]  && [ $RAW == 0 ] ; then
     echo "cmd=$cmd"
     eval $cmd
 fi
+
 ./fioparse.sh $OUTPUT/*out > $OUTPUT/fio_summary.out 
-./fioparse.sh -r $(uname -n) $OUTPUT/*out  > $OUTPUT/fio_summary.r 
+./fioparse.sh -r $(uname -n) $OUTPUT/*out  > $OUTPUT/fio_summary.r
+cat $OUTPUT/new_fio_summary.r<< __EOF__
+colnames <- c("terse_version", "fio_version", "name", "groupipd", "error",
+"total_io", "bw", "iops", "run",
+"min_s", "max_s", "mean_s", "std_s",
+"min_c", "max_c", "mean_c", "std_c",
+"name","users","bs","MB","lat","min","max","std","iops"
+, "us50","us100","us250","us500","ms1","ms2","ms4","ms10","ms20"
+, "ms50","ms100","ms250","ms500","s1","s2","s5"
+,"p95_00", "p99_00", "p99_50", "p99_90", "p99_95", "p99_99"
+)
+
+__EOF__
 cat $OUTPUT/fio_summary.out
 cat << __EOF__ > $OUTPUT/plot.r
 source("fiop.r")
@@ -776,4 +790,4 @@ source("$OUTPUT/fio_summary.r")
 dir =  "$OUTPUT"
 source("fiopg.r")
 __EOF__
-R --no-save -f $OUTPUT/plot.r
+LANG=C R --no-save -f $OUTPUT/plot.r
