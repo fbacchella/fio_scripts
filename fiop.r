@@ -40,19 +40,22 @@
 #                    "95", "99", "9999" 
 
 graphit <- function(
-                    m,i_name="undefined",i_users=0,i_bs="undefined", i_title="default title",i_hist=1,i_poly=1,
-                    i_plot_avg  = 1 ,
-                    i_plot_max  = 1 ,
-                    i_plot_95   = 1 ,
-                    i_plot_99   = 1 ,
-                    i_plot_9999 = 0 ,
-                    i_scalelat  = "avg" ,
-                    i_plots = 3
+                    m,
+                    i_name="undefined", i_users=0, i_bs="undefined", 
+                    i_title="default title", 
+                    i_hist=1,i_poly=1,
+                    i_plot_avg  = 1,
+                    i_plot_max  = 1,
+                    i_plot_95   = 1,
+                    i_plot_99   = 1,
+                    i_plot_9999 = 1,
+                    i_scalelat  = "avg",
+                    i_plots = 2
                     ) {
 
-  # 
-  #  COLOR Definition 
-  #
+    # 
+    #  COLOR Definition 
+    #
      colors <- c(
             "#00007F", # 50u   1 blue
             "#0000BB", # 100u  5
@@ -71,24 +74,17 @@ graphit <- function(
             "#7F0000", # 2s    18 dark red 2
             "#4F0000") # 5s    18 dark red 2
 
-  #
-  #   example
-  #
-  #     rr <- m ;
-  #     rr <- subset(rr,rr['bs'] == "8K" )
-  #     rr <- subset(rr,rr['name'] == "randread" )
-
-  #
-  # rr will be the subset of m that is graphed
-  #
+    #
+    # rr will be the subset of m that is graphed
+    #
   
     rr <- m ;
 
-  #
-  # filter by test name, if no test name make it 8K random read by default
-  #
-  #    DEFAULT : RANDOM READ 
-  #
+    #
+    # filter by test name, if no test name make it 8K random read by default
+    #
+    #    DEFAULT : RANDOM READ 
+    #
     if ( i_name != "undefined" ) {
         rr <- subset(rr,rr['name'] == i_name )
         cat("rr filtered for name=",i_name,"\n");
@@ -96,7 +92,6 @@ graphit <- function(
     } else {
         rr <- subset(rr,rr['name'] == "randread" )
         i_bs = "8K"
-        cat("no name\n");
         i_scalex = "users"
     }
     if ( i_name == "randread" ) {
@@ -108,12 +103,12 @@ graphit <- function(
     if ( i_name == "write" ) {
         maxMBs = 100
     }
-  # 
-  # if i_users > 0 then users is defined as a single value
-  # ie, block sizes vary 
-  #
-  #   XAXIS =  BLOCK SIZE    
-  #
+    # 
+    # if i_users > 0 then users is defined as a single value
+    # ie, block sizes vary 
+    #
+    #   XAXIS =  BLOCK SIZE    
+    #
     if ( i_users > 0 ) {
         rr <- subset(rr,rr['users'] == i_users )
         cat("rr filterd for users=",i_users,"\n");
@@ -122,12 +117,12 @@ graphit <- function(
     } else {
         cat("no users\n");
     }
-  # 
-  # if i_bs > 0 then block size is defined as a single value
-  # ie, users vary 
-  #
-  #   XAXIS =   USERS   
-  #
+    # 
+    # if i_bs > 0 then block size is defined as a single value
+    # ie, users vary 
+    #
+    #   XAXIS =   USERS   
+    #
     if ( i_bs != "undefined" ) {
         rr <- subset(rr,rr['bs'] == i_bs )
         cat("rr filterd for bs=",i_bs,"\n");
@@ -137,16 +132,16 @@ graphit <- function(
         cat("no block sise\n");
     }
 
-  #
-  # HISTOGRAM extract the histogram latency values out of rr
-  #
+    #
+    # HISTOGRAM extract the histogram latency values out of rr
+    #
     hist <- cbind(rr['us50'],rr['us100'], rr['us250'],rr['us500'],rr['ms1'],
                   rr['ms2'],rr['ms4'],rr['ms10'],rr['ms20'],rr['ms50'],
                   rr['ms100'],rr['ms250'],rr['ms500'],rr['s1'],rr['s2'],rr['s5']) 
 
-  #
-  #  > 10ms IOPS
-  #
+    #
+    #  > 10ms IOPS
+    #
     ms10more <-
         as.numeric(t(rr['ms20'])) +
         as.numeric(t(rr['ms50'])) +
@@ -168,9 +163,9 @@ graphit <- function(
         as.numeric(t(hist['us250'])) +
         as.numeric(t(hist['us500'])) +
         as.numeric(t(hist['ms1']))  
-  #
-  #  10ms IOPS matrix
-  #
+    #
+    #  10ms IOPS matrix
+    #
     mstotal  <- ms1less + ms1more + ms10more
     ms1less  <- (ms1less/mstotal)
     ms1more  <- (ms1more/mstotal)
@@ -178,19 +173,19 @@ graphit <- function(
     ms10     <- rbind(ms1less,ms1more,ms10more)
     print(ms10)
 
-  #
-  #  HISTOGRAM buckets for main graph
-  #
+    #
+    #  HISTOGRAM buckets for main graph
+    #
     thist  <- t(hist)
-  #
-  #  HISTOGRAM slices for MB/s bar graph
-  #
+    #
+    #  HISTOGRAM slices for MB/s bar graph
+    #
     fhist   <- apply(hist, 1,as.numeric)
     fhist   <- fhist/100
  
-  # 
-  # extract various columns from the data (in rr)
-  # 
+    # 
+    # extract various columns from the data (in rr)
+    # 
     lat    <- as.numeric(t(rr['lat']))
     users  <- as.numeric(t(rr['users']))
     bs     <- as.character(t(rr['bs']))
@@ -214,102 +209,106 @@ graphit <- function(
     p99_99 <- pmax(p99_99, minlat)
     lat    <- pmax(lat, minlat)
     maxlat <- pmax(maxlat, p99_99)  # sometimes p99_99 is actually larger than max
-  #
-  # widths used for overlaying the histograms
-  #
+    #
+    # widths used for overlaying the histograms
+    #
     xmaxwidth <- length(lat)+1
     xminwidth <- .5
-  # doesn't look used
-  # looks like "cols" is used instead
+    # doesn't look used
+    # looks like "cols" is used instead
     pts <- 1:nrow(thist)  
     ymax=1000  # max can be adjusted, 1000 = 1sec, 5000 = 5 sec
     ymin=0.100 # ymin has to be 0.1 to get the histograms to line up with latency
     ylims <-  c(ymin,ymax)
 
-  #
-  # SCALING
-  #
-      # BLOCK SIZE CHARACTER to NUMERIC
-    scalingx <- as.numeric(gsub("M","0024",gsub("K","", eval(parse(text=i_scalex)))))
-    if  ( i_scalelat == "avg" )  { lat_scaling <- lat;   }
-    if  ( i_scalelat == "95" )   { lat_scaling <- p95_00 }
-    if  ( i_scalelat == "99" )   { lat_scaling <- p99_00 }
-    if  ( i_scalelat == "9999" ) { lat_scaling <- p95_99 }
+    #
+    # SCALING
+    #
+    if ( i_plots == 3 ) {
+        #
+        # BLOCK SIZE CHARACTER to NUMERIC
+        scalingx <- as.numeric(gsub("M","0024",gsub("K","", eval(parse(text=i_scalex)))))
+        if  ( i_scalelat == "avg" )  { lat_scaling <- lat;   }
+        if  ( i_scalelat == "95" )   { lat_scaling <- p95_00 }
+        if  ( i_scalelat == "99" )   { lat_scaling <- p99_00 }
+        if  ( i_scalelat == "9999" ) { lat_scaling <- p95_99 }
 
-     #  SCALING = (ratio of lat at point 2 over point 1)
-     #             divided by
-     #            (ratio of xval at point 2 over point 1)
-     #             xval is either #users or I/O request size
-     #   ie when lat grows faster than xval, ie scaling > 1 
-     #      which is bad, ie the throughput actually decreases           
-     #   negative values are where the latency actual got faster
-     #   at higher x values
+        #  SCALING = (ratio of lat at point 2 over point 1)
+        #             divided by
+        #            (ratio of xval at point 2 over point 1)
+        #             xval is either #users or I/O request size
+        #   ie when lat grows faster than xval, ie scaling > 1 
+        #      which is bad, ie the throughput actually decreases           
+        #   negative values are where the latency actual got faster
+        #   at higher x values
 
-    #  initialize the vectors to NA values but correct length
-    scaling <- rep(NA,(length(lat)-1) )
-    scalecolor <- rep(NA,(length(lat)-1) )
-    for ( i in 1:(length(lat)-1) ) {
-        cat("lat_a ",lat[i],"lat_b",lat[i+1],"\n")
-        cat("scalex_a ",scalingx[i],"scalex_b",scalingx[i+1],"\n")
-        # ratio of latency at i+1 to i , factor of increase
-        lat_f = lat[i+1]/lat[i]
-        # ratio of incease in user count or blocksize
-        sca_f = scalingx[i+1]/scalingx[i]
-        cat("lat_f[",i,"]=",lat_f,"\n")
-        cat("sca_f[",i,"]=",sca_f,"\n")
-        # ratio of increase in latency over increase load (users or blocksize)
-        scalei <- (lat_f)/sca_f
-        cat("scalei ",scalei,"\n")
-        # want to graphically exagerate the higher values and dampen the smaller values
-        scaling[i] <- 2^(scalei*10)/1024  # > 1 means throughput is going down 2^(1*10)
-        cat("scalei exp",scaling[i],"\n")
-        scalecolor[i] <- "#F8CFCF"  # regular red (light)
-        if ( lat[i] > lat[i+1] ) { 
-            scaling[i] <- scaling[i]*(-1) 
-            scalecolor[i] <-  "#CBCDFF"  # light blue
+        #  initialize the vectors to NA values but correct length
+        scaling <- rep(NA,(length(lat)-1) )
+        scalecolor <- rep(NA,(length(lat)-1) )
+        for ( i in 1:(length(lat)-1) ) {
+            cat("lat_a ",lat[i],"lat_b",lat[i+1],"\n")
+            cat("scalex_a ",scalingx[i],"scalex_b",scalingx[i+1],"\n")
+            # ratio of latency at i+1 to i , factor of increase
+            lat_f = lat[i+1]/lat[i]
+            # ratio of incease in user count or blocksize
+            sca_f = 1 # scalingx[i+1]/scalingx[i]
+            cat("lat_f[",i,"]=",lat_f,"\n")
+            cat("sca_f[",i,"]=",sca_f,"\n")
+            # ratio of increase in latency over increase load (users or blocksize)
+            scalei <- (lat_f)/sca_f
+            cat("scalei ",scalei,"\n")
+            # want to graphically exagerate the higher values and dampen the smaller values
+            scaling[i] <- 2^(scalei*10)/1024  # > 1 means throughput is going down 2^(1*10)
+            cat("scalei exp",scaling[i],"\n")
+            scalecolor[i] <- "#F8CFCF"  # regular red (light)
+            if ( lat[i] > lat[i+1] ) { 
+                scaling[i] <- scaling[i]*(-1) 
+                scalecolor[i] <-  "#CBCDFF"  # light blue
+            }
+            # not quite sure how this happens, but in some cases
+            # latency goes up by a smaller factor the users or block size
+            # yet throughput goes down, in this case
+            if ( MB[i] > MB[i+1] ) { scalecolor[i] <-  "#DFA2A2"  } # dark red
         }
-        # not quite sure how this happens, but in some cases
-        # latency goes up by a smaller factor the users or block size
-        # yet throughput goes down, in this case
-        if ( MB[i] > MB[i+1] ) { scalecolor[i] <-  "#DFA2A2"  } # dark red
+
     }
 
-  #
-  #  LABEL= BLOCK SIZE 
-  #
-    if ( i_users > 0 ) { col_lables <- bs }
-  #
-  #  LABEL = USERS
-  #
-    if ( i_bs != "undefined" ) { col_lables <- users }
+    #
+    #  LABEL= BLOCK SIZE 
+    #
+    if ( i_users > 0 ) { col_labels <- bs }
+    #
+    #  LABEL = USERS
+    #
+    if ( i_bs != "undefined" ) { col_labels <- users }
 
-  #
-  # LAYOUT
-  #
-  #    top  :    large squarish     on top     for latency
-  #    botom:    shorter rectangle  on bottom  for MB/s
-  #
+    #
+    # LAYOUT
+    #
+    #    top  :    large squarish     on top     for latency
+    #    botom:    shorter rectangle  on bottom  for MB/s
+    #
     if ( i_plots == 2 )  {
         nf <- layout(matrix(c(2:1)), widths = 13, heights = c(7, 3), respect = TRUE)
     }
     if ( i_plots == 3 )  {
         nf <- layout(matrix(c(3:1)), widths = 13, heights = c(7, 3, 3), respect = TRUE)
     }
-  #
-  # set margins (bottom, left, top, right)
-  #   get rid of top, so the bottome graph is flush with one above
-  #            B  L  T  R
+    #
+    # set margins (bottom, left, top, right)
+    #   get rid of top, so the bottome graph is flush with one above
+    #         B  L  T  R
     par(mar=c(2, 4, 0, 4))
 
-  #
-  # GRAPH  NEW  1
-  #
-  #     MB/s BARS in bottom graph
-  #
+    #
+    # GRAPH  NEW  1
+    #
+    #     MB/s BARS in bottom graph
+    #
     logMB <- log(MB+1)
     MBbars <- t(t(fhist)*logMB)
-    colnames(MBbars) = col_lables
-  #            B  L  T  R
+    colnames(MBbars) = col_labels
+    #         B  L  T  R
     par(mar=c(2, 4, 0, 4))
     op <- barplot(MBbars,col=colors,ylab="MB/s",border=NA,space=1, ylim=c(0,log(1200)),xlim=c(1,2*length(lat)+1),
                   yaxt  = "n" )
@@ -319,15 +318,15 @@ graphit <- function(
     ylbs  <-  c(  "1",  "10", "100",  "1000");
     axis(2,at=ypts, labels=ylbs)
 
-  #
-  # GRAPH  NEW   2
-  #
-  #      SCALING BARS in middle graph
-  #
-  #            B  L  T  R
+    #
+    # GRAPH  NEW   2
+    #
+    #      SCALING BARS in middle graph
+    #
+    #        B  L  T  R
     par(mar=c(1, 4, 0, 4))
     if ( i_plots == 3 ) {
-  #      AVERAGE LATENCY
+    #   AVERAGE LATENCY
         ymin=min(lat)
         ymax=max(lat)
         avglat_func = function(xminwidth,xmaxwidth,ymin,ymax) {
@@ -383,38 +382,38 @@ graphit <- function(
         par(new = TRUE)
         avglat_func(xminwidth,xmaxwidth,ymin,ymax) 
     }
-  #           B  L  T  R
+    #         B  L  T  R
     par(mar=c(1, 4, 1, 4))
 
-  #
-  # GRAPH  NEW  3
-  #
-  #  AVERGE latency  line
-  #
-  #  LOG SCALE 
+    #
+    # GRAPH  NEW  3
+    #
+    #  AVERGE latency  line
+    #
+    #  LOG SCALE 
     mylog <- "y"
 
-  #
-  # ms10 SUCCESS overlay on top graph ( latency lines )
-  #
+    #
+    # ms10 SUCCESS overlay on top graph ( latency lines )
+    #
     op <- barplot(ms10, col=c("#C6D4F8", "#C9FACF",  "#FFF6A0"),ylim =c(0,1), xlab="", ylab="",border=NA,space=0,yaxt="n",xaxt="n") 
     par(new = TRUE )
 
-  # AVERGE get's ploted twice because there has to be something to initialize the graph
-  # whether that something is really wanted or used, the graph has to be initialized
-  # probably a better way to initialize it, will ook into later
-  # sets up YAXIS in LOGSCALE
+    # AVERGE get's ploted twice because there has to be something to initialize the graph
+    # whether that something is really wanted or used, the graph has to be initialized
+    # probably a better way to initialize it, will ook into later
+    # sets up YAXIS in LOGSCALE
     if ( i_plot_avg == 1 ) {
         plot(cols, lat, type = "l", xaxs = "i", lty = 1, col = "gray30", lwd = 1, bty = "l", 
              xlim = c(xminwidth,xmaxwidth), ylim = ylims, ylab = "" , xlab="",log = mylog, yaxt = "n" , xaxt ="n")
         text(cols,lat,round(lat,1),adj=c(1,2))
     }
 
- #
- #  POLYGONS showing the 95%, 99%, 99.99%  curves
- #
- #    will only be in logscale if last plot is log scale
- # 
+    #
+    #  POLYGONS showing the 95%, 99%, 99.99%  curves
+    #
+    #    will only be in logscale if last plot is log scale
+    # 
     if ( i_poly == 1 ) {
         if ( i_plot_95   == 1 ) {
             polygon(c(cols,rev(cols)),c(   lat,rev(p95_00)), col="gray80",border=NA)
@@ -427,9 +426,9 @@ graphit <- function(
         }
     }
 
- #
- #  HISTOGRAMS : overlay histograms on line graphs
- #
+    #
+    #  HISTOGRAMS : overlay histograms on line graphs
+    #
     if ( i_hist == 1 ) {
         par(new = TRUE )
         for (i in 1:ncol(thist)){
@@ -445,9 +444,9 @@ graphit <- function(
         }
     }
 
-  #
-  #  AVERGE latency  line
-  #
+    #
+    #  AVERGE latency  line
+    #
     if ( i_plot_avg == 1 ) {
         par(new = TRUE)
         plot(cols, lat, type = "l", xaxs = "i", lty = 1, col = "gray30", lwd = 1, bty = "l", 
@@ -456,9 +455,9 @@ graphit <- function(
         title(main=i_title)
     }
 
-  #
-  # 95% latency 
-  #
+    #
+    # 95% latency 
+    #
     if ( i_plot_95 == 1 ) {
         par(new = TRUE)
         plot(cols, p95_00, type = "l", xaxs = "i", lty = 5, col = "grey40", lwd = 1, bty = "l", 
@@ -466,10 +465,9 @@ graphit <- function(
         text(tail(cols,n=1),tail(p95_00, n=1),"95%",adj=c(0,0),col="gray20",cex=.7)
     }
 
-    cat("hello 3\n")
-  #
-  # 99% latency 
-  #
+    #
+    # 99% latency 
+    #
     if ( i_plot_99 == 1 ) {
         par(new = TRUE)
         plot(cols, p99_00, type = "l", xaxs = "i", lty = 2, col = "grey60", lwd = 1, bty = "l", 
@@ -477,9 +475,9 @@ graphit <- function(
         text(tail(cols,n=1),tail(p99_00, n=1),"99%",adj=c(0,0),col="gray20",cex=.7)
     }
 
-  #
-  # 99.99% latency 
-  #
+    #
+    # 99.99% latency 
+    #
     if ( i_plot_9999 == 1 ) {
       par(new = TRUE)
       plot(cols, p99_99, type = "l", xaxs = "i", lty = 3, col = "grey70", lwd = 1, bty = "l", 
@@ -488,9 +486,9 @@ graphit <- function(
           text(tail(cols,n=1),tail(p99_99, n=1),"99.99%",adj=c(0,0),col="gray20",cex=.7)
     }
 
-  #
-  # max latency 
-  #
+    #
+    # max latency 
+    #
     if ( i_plot_max == 1 ) {
       cat("cols\n")
       print(cols)
@@ -502,9 +500,9 @@ graphit <- function(
       text(cols,maxlat,round(maxlat,1),adj=c(1,-1))
     }
 
-  #
-  # right hand tick lables
-  #
+    #
+    # right hand tick lables
+    #
     if ( i_hist == 1 ) {
       ypts  <- c(.05,.100,.250,.500,1,2,4,10,20,50,100,200,500,1000,2000,5000) 
       ylbs=c("us50","us100","us250","us500","ms1","ms2","ms4","ms10","ms20","ms50","ms100","ms200","ms500","s1","s2","s5" )
@@ -513,9 +511,9 @@ graphit <- function(
       }
    }
 
-  #
-  # left hand tick lables
-  #
+    #
+    # left hand tick lables
+    #
     ypts  <-  c(0.100,    1,       10,    100,  1000, 5000);
     ylbs  <-  c("100u"   ,"1m",  "10m", "100m",  "1s","5s");
     axis(2,at=ypts, labels=ylbs)
