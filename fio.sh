@@ -260,10 +260,11 @@ EOF
 
 initialize()
 {
+    DDOUT=$(mktemp -t fio.dd.XXXXXX) 
     echo ""
     echo "creating 10 MB  seed file of random data"
     echo ""
-    $DD if=/dev/urandom of=/tmp/fio.$$ bs=512 count=20480
+    $DD if=/dev/urandom of=$DDOUT bs=512 count=20480
     echo ""
     echo "creating $MB_per_LUN MB of random data on $rawdev"
     echo ""
@@ -273,33 +274,33 @@ initialize()
     characters=0
     loops=1
     BEG=$(date +%s)
-    while [[ $loops -le $TENMEGABYTES ]] ; do  # {
-       let seek=$loops*10
-       cmd="$DD if=/tmp/fio.$$ of=${outfile} bs=1024k seek=$seek count=10 > /tmp/fio.dd.out 2>&1"
+    while [[ $loops -le $TENMEGABYTES ]] ; do
+        let seek=$loops*10
+        cmd="$DD if=$DDOUT of=${outfile} bs=1024k seek=$seek count=10 > /tmp/fio.dd.out 2>&1"
      # was the command for file
      # cmd="$DD if=/tmp/fio.$$ of=${outfile} bs=1024k oflag=append conv=notrunc count=1 > /tmp/fio.dd.out 2>&1"
-       eval $cmd
-       RET=$?
-       if [ $RET -eq 0 ] ; then # {
-          echo -n "."
-          characters=$(expr $characters + 1)
-          if [ $characters -gt $linesize ] ; then # {
-            END=`date +%s`
-            let DELTA=$END-$BEG
-            let MB_LEFT=$MB_per_LUN-$seek
-            let MB_PER_SEC=($linesize*10)/$DELTA
-            let SECS_LEFT=$MB_LEFT/$MB_PER_SEC
-            echo " $MB_LEFT MB remaining  $MB_PER_SEC MB/s $SECS_LEFT seconds left"
-            characters=0
-            BEG=`date +%s`
-          fi  # }
-       else
-          echo "RET:$RET:"
-          cat /tmp/fio.dd.out
-       fi # }
-       loops=$(expr $loops + 1)
-    done   #  }
-    rm /tmp/fio.dd.out
+        eval $cmd
+        RET=$?
+        if [ $RET -eq 0 ] ; then # {
+            echo -n "."
+            characters=$(expr $characters + 1)
+            if [ $characters -gt $linesize ] ; then
+                END=`date +%s`
+                let DELTA=$END-$BEG
+                let MB_LEFT=$MB_per_LUN-$seek
+                let MB_PER_SEC=($linesize*10)/$DELTA
+                let SECS_LEFT=$MB_LEFT/$MB_PER_SEC
+                echo " $MB_LEFT MB remaining  $MB_PER_SEC MB/s $SECS_LEFT seconds left"
+                characters=0
+                BEG=`date +%s`
+            fi
+        else
+            echo "RET:$RET:"
+            cat /tmp/fio.dd.out
+        fi
+        loops=$(expr $loops + 1)
+    done
+    rm /tmp/fio.dd.out $DDOUT
 }
 
 # record size to use when creating a ZFS filesystem
@@ -450,33 +451,31 @@ if [ "$FILENAME" == "" ] ; then
     OFFSET=0
 fi
 
-
-mkdir $OUTPUT > /dev/null 2>&1
 if [ ! -d $OUTPUT ]; then 
-  echo "directory $OUTPUT does not exist"
-  exit
+    echo "directory $OUTPUT does not exist"
+    exit
 fi
 
 DD="$(type -p dd)"
 if [ -f /etc/delphix/version ]  ; then 
-   # /usr/bin/dd doesn't have an append option
-   DD=/usr/gnu/bin/dd
-   DIRECT=0
-   # if running on Delphix, then collect DTrace I/O info
-   DTRACE1=" sudo dtrace -c ' "
-   DTRACE2=" ' -s fio.d  "
-   if [ $DTRACE == 0 ] ; then
-     DTRACE1=" "
-     DTRACE2=" "
-   fi
+    # /usr/bin/dd doesn't have an append option
+    DD=/usr/gnu/bin/dd
+    DIRECT=0
+    # if running on Delphix, then collect DTrace I/O info
+    DTRACE1=" sudo dtrace -c ' "
+    DTRACE2=" ' -s fio.d  "
+    if [ $DTRACE == 0 ] ; then
+        DTRACE1=" "
+        DTRACE2=" "
+    fi
 fi
 
 all="randrw read write readrand"
 all="readrand write read "
 if [ $TESTS = "all" ] ; then
-  jobs=$all
+    jobs=$all
 else 
-  jobs=$TESTS
+    jobs=$TESTS
 fi
 
 if [ ! -x "$BINARY" ] ; then
@@ -501,75 +500,75 @@ echo "    size per file of multiple files=\"$SIZE\""
 
 # if running on Delphix and not using RAW LUNs, ie using /domain0
 if [ -f /etc/delphix/version ] && [ $RAW -eq 0 ] ; then 
-   FILESYSTEM=`echo $DIRECTORY | sed -e 's;^/;;' `
-   DOMAIN=`echo $FILESYSTEM    | sed -e 's;/.*;;' `
-   echo "DIRECTORY=$DIRECTORY"
-   echo "FILESYSTEM=$FILESYSTEM"
-   echo "DOMAIN=$DOMAIN"
+    FILESYSTEM=`echo $DIRECTORY | sed -e 's;^/;;' `
+    DOMAIN=`echo $FILESYSTEM    | sed -e 's;/.*;;' `
+    echo "DIRECTORY=$DIRECTORY"
+    echo "FILESYSTEM=$FILESYSTEM"
+    echo "DOMAIN=$DOMAIN"
 
-   # setting up  a filesystem on  Delphix for iotesting
-   # primarycache can be set to all, metadata or none
-   if [  -d $DIRECTORY ]; then 
-      echo "$DIRECTORY already exists"
-      echo "suggest running the following commands: "
-      echo "  sudo umount $DIRECTORY "
-      echo "  sudo rm -rf $DIRECTORY "
-      echo "  sudo zfs destroy $FILESYSTEM "
-      echo "  sudo zpool  destroy $FILESYSTEM"
-      if [ $FORCE = "n" ] ; then
-         echo "drop fs [default=n] ? (y/n) "
-         read response
-         if [ "$response" == "y" ]; then
-               echo "run the following commands to drop filesystem:"
-               echo "  sudo umount $DIRECTORY "
-               echo "  sudo rm -rf $DIRECTORY "
-               echo "  sudo zfs destroy $FILESYSTEM "
-               echo "exiting..."
-               #sudo zpool  destroy $FILESYSTEM
-               #echo "Exiting program."
-               exit 1
-         fi
-     fi
-   fi
-   if [ !  -d $DIRECTORY ]; then 
-      echo "directory:$DIRECTORY, does not exit"
-      echo "trying to create zfs filesystem:$FILESYSTEM"
-      cmd="sudo zfs create $FILESYSTEM"
-      echo $cmd
-      eval $cmd
-      cmd="sudo zfs set primarycache=$PRIMARYCACHE $FILESYSTEM"
-      echo $cmd
-      eval $cmd
-      cmd="sudo zfs set compression=$COMPRESSION $FILESYSTEM"
-      echo $cmd
-      eval $cmd
-      cmd="sudo zfs set secondarycache=$SECONDARYCACHE $FILESYSTEM"
-      echo $cmd
-      eval $cmd
-      cmd="sudo zfs set recordsize=$RECORDSIZE $FILESYSTEM"
-      echo $cmd
-      eval $cmd
-      cmd="sudo chmod 777 $DIRECTORY"
-      echo $cmd
-      eval $cmd
-   fi
-   for i in 1 ; do
-     echo "running the following commands: "
-     cmd="   sudo  zfs get primarycache $DIRECTORY"
-      echo "   $cmd"
-      eval $cmd >  $OUTPUT/setup.txt
-     cmd="   sudo  zfs get secondarycache $DIRECTORY"
-      echo "   $cmd"
-      eval $cmd >>  $OUTPUT/setup.txt
-     cmd="   sudo  zfs get recordsize $DIRECTORY"
-      echo "   $cmd"
-      eval $cmd >>  $OUTPUT/setup.txt
-     cmd="   sudo  zfs get compression $DIRECTORY"
-      echo "   $cmd"
-      eval $cmd >>  $OUTPUT/setup.txt
-   done 
-   echo "results:"
-   cat $OUTPUT/setup.txt | grep -v PROPERTY | sed -e 's/^/   /' 
+    # setting up  a filesystem on  Delphix for iotesting
+    # primarycache can be set to all, metadata or none
+    if [  -d $DIRECTORY ]; then 
+        echo "$DIRECTORY already exists"
+        echo "suggest running the following commands: "
+        echo "  sudo umount $DIRECTORY "
+        echo "  sudo rm -rf $DIRECTORY "
+        echo "  sudo zfs destroy $FILESYSTEM "
+        echo "  sudo zpool  destroy $FILESYSTEM"
+        if [ $FORCE = "n" ] ; then
+            echo "drop fs [default=n] ? (y/n) "
+            read response
+            if [ "$response" == "y" ]; then
+                echo "run the following commands to drop filesystem:"
+                echo "  sudo umount $DIRECTORY "
+                echo "  sudo rm -rf $DIRECTORY "
+                echo "  sudo zfs destroy $FILESYSTEM "
+                echo "exiting..."
+                #sudo zpool  destroy $FILESYSTEM
+                #echo "Exiting program."
+                exit 1
+            fi
+        fi
+    fi
+    if [ !  -d $DIRECTORY ]; then 
+        echo "directory:$DIRECTORY, does not exit"
+        echo "trying to create zfs filesystem:$FILESYSTEM"
+        cmd="sudo zfs create $FILESYSTEM"
+        echo $cmd
+        eval $cmd
+        cmd="sudo zfs set primarycache=$PRIMARYCACHE $FILESYSTEM"
+        echo $cmd
+        eval $cmd
+        cmd="sudo zfs set compression=$COMPRESSION $FILESYSTEM"
+        echo $cmd
+        eval $cmd
+        cmd="sudo zfs set secondarycache=$SECONDARYCACHE $FILESYSTEM"
+        echo $cmd
+        eval $cmd
+        cmd="sudo zfs set recordsize=$RECORDSIZE $FILESYSTEM"
+        echo $cmd
+        eval $cmd
+        cmd="sudo chmod 777 $DIRECTORY"
+        echo $cmd
+        eval $cmd
+    fi
+    for i in 1 ; do
+        echo "running the following commands: "
+        cmd="   sudo  zfs get primarycache $DIRECTORY"
+        echo "   $cmd"
+        eval $cmd >  $OUTPUT/setup.txt
+        cmd="   sudo  zfs get secondarycache $DIRECTORY"
+        echo "   $cmd"
+        eval $cmd >>  $OUTPUT/setup.txt
+        cmd="   sudo  zfs get recordsize $DIRECTORY"
+        echo "   $cmd"
+        eval $cmd >>  $OUTPUT/setup.txt
+        cmd="   sudo  zfs get compression $DIRECTORY"
+        echo "   $cmd"
+        eval $cmd >>  $OUTPUT/setup.txt
+    done 
+    echo "results:"
+    cat $OUTPUT/setup.txt | grep -v PROPERTY | sed -e 's/^/   /' 
 fi 
 
 if [ -f /etc/delphix/version ]  ; then  # {
