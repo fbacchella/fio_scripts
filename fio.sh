@@ -287,6 +287,10 @@ initialize()
             if [ $characters -gt $linesize ] ; then
                 END=`date +%s`
                 let DELTA=$END-$BEG
+                #can not divide by zero
+                if [ $DELTA -eq 0 ]; then
+                    DELTA=1
+                fi
                 let MB_LEFT=$MB_per_LUN-$seek
                 let MB_PER_SEC=($linesize*10)/$DELTA
                 let SECS_LEFT=$MB_LEFT/$MB_PER_SEC

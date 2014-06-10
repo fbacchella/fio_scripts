@@ -115,42 +115,43 @@ sub print_hist {
     # for all possible fo buckets, @buckets_fio is all known fio histogram buckets
     if ( $rplot_hist == 1 ) {
         foreach $curbucket (@rbuckets_fio) {
-            #print "\n$curbucket\n";
             $label="";
             if ($curbucket eq "2" ) {
                 if ( $labels == 1 ) {
-                    $label="us50=";
+                    $label=$bucketr{"50"}."=";
                 }
-                printf("%s%2d",$label, int(${$hist_type}{"2"} + ${$hist_type}{"4"} + ${$hist_type}{"10"} + ${$hist_type}{"20"} + ${$hist_type}{"50"})||0 );
-                ${$hist_type}{"2"} = -1;
-                ${$hist_type}{"4"} = -1;
-                ${$hist_type}{"10"} = -1;
-                ${$hist_type}{"20"} = -1;
-                ${$hist_type}{"50"} = -1;
+                printf(",%s%2d",$label, int(${$hist_type}{"2"})||0 + int(${$hist_type}{"4"})||0 + int(${$hist_type}{"10"})||0 + int(${$hist_type}{"20"})||0 + int(${$hist_type}{"50"})||0 );
+                delete ${$hist_type}{"2"};
+                delete ${$hist_type}{"4"};
+                delete ${$hist_type}{"10"};
+                delete ${$hist_type}{"20"};
+                delete ${$hist_type}{"50"};
             }
-            elsif ( $curbucket eq "1000" ) {
+            # merge 750 and 1000 bucket
+            elsif ( $curbucket eq "1000" || $curbucket eq "750" ) {
                 if ( $labels == 1 ) {
-                    $label=$bucketr{$curbucket}."=";
+                    $label=$bucketr{"1000"}."=";
                 }
-                printf(",%s%2d",$label, (${$hist_type}{$curbucket} + ${$hist_type}{"750"})||0 );
+                printf(",%s%2d",$label, int(${$hist_type}{"1000"})||0 + int(${$hist_type}{"750"})||0 );
                 delete ${$hist_type}{"750"};
+                delete ${$hist_type}{"1000"};
             }
-            elsif ( $curbucket eq "1000000" ) {
-                if ( $labels == 1 ) { $label=$bucketr{$curbucket}."="; }
-                printf(",%s%2d",$label, int(${$hist_type}{$curbucket}+ ${$hist_type}{"750000"})||0 );
+            # merge 750000 and 1000000 bucket
+            elsif ( $curbucket eq "1000000" || $curbucket eq "750000" ) {
+                if ( $labels == 1 ) { $label=$bucketr{"1000000"}."="; }
+                printf(",%s%2d",$label, int(${$hist_type}{"1000000"})||0+ int(${$hist_type}{"750000"})||0 );
+                delete ${$hist_type}{"1000000"};
                 delete ${$hist_type}{"750000"};
-                # the "20000000" bucket is just a tag for > 2s, so lets call it 5s for graphing purposes
             }
+            # the "20000000" bucket is just a tag for > 2s, so lets call it 5s for graphing purposes
             elsif ( $curbucket eq "20000000" ) {
                 if ( $labels == 1 ) { $label="s5="; }
                 printf(",%s%2d",$label, int(${$hist_type}{$curbucket})||0 );
             }
-            else {
+            elsif (defined ${$hist_type}{$curbucket}) {
                 $value = int(${$hist_type}{$curbucket})||0;
-                if ( $value >= 0) {
-                    if ( $labels == 1 ) { $label=$bucketr{$curbucket}."="; }
-                    printf(",%s%2d",$label,  );   
-                }
+                if ( $labels == 1 ) { $label=$bucketr{$curbucket}."="; }
+                printf(",%s%2d",$label, $value);   
             }
             delete ${$hist_type}{$curbucket};
         }
@@ -326,55 +327,37 @@ sub parse_line {
     my ($line) = @_;
     chomp($line);
     printf("line: %s\n", $line) if defined ($debug);
-    #job: (g=0): rw=randread, bs=8K-8K/8K-8K, ioengine=psync, iodepth=2
-    if ( $line =~ m/filename/ ) {
+    #filename=
+    if ( $line =~ m/^filename=/ ) {
         $dir=$line;
         $dir =~ s/filename=//;
         $dir =~ s/\/.*//;
+        
+        # prepare an empty latency array
+        foreach $curbucket (@rbuckets_fio) {
+            $lat{$curbucket}=0;
+        }
     }
-    if ( $line =~ m/ ioengine=/ ) {
+    #job: (g=0): rw=randread, bs=8K-8K/8K-8K, ioengine=psync, iodepth=2
+    elsif ( $line =~ m/ ioengine=/ ) {
         $bs=$benchmark=$line;
         $benchmark =~ s/.* rw=//;
         $benchmark =~ s/,.*//;
         $bs =~ s/.* bs=//;
-        $bs =~ s/-.*//;
-        next;
-    }
-    # READ: io=48216KB, aggrb=802KB/s, minb=822KB/s, maxb=822KB/s, mint=60052msec, maxt=60052msec
-    # WRITE: io=12256KB, aggrb=204KB/s, minb=208KB/s, maxb=208KB/s, mint=60052msec, maxt=60052msec
-    if ( $line =~ m/ aggrb=/ ) {
-        $type=$throughput=$line;
-        $type =~ s/:.*//;
-        $type =~ s/[ ][ ]*//;
-        # lower case:
-        $type = lc( $type);
-        $throughput =~ s/.*aggrb=//;
-        $throughput =~ s/,.*//;
-        printf("throughput:%s:\n",$throughput) if defined ($debug);
-        $factor = $throughput;
-        $factor =~ s/.*MB.s/1048576/;
-        $factor =~ s/.*KB.s/1024/;
-        $factor =~ s/.*B.s/1/;
-        $throughput =~ s/MB.s//;
-        $throughput =~ s/KB.s//;
-        $throughput =~ s/B.s//;
-        printf("throughput:%s: factor:%s:\n",$throughput,$factor) if defined ($debug);
-        $throughput{$type}=$throughput*$factor;
-        next;
+        $bs =~ s/-.*//;        
     }
     # read : io=48216KB, bw=822173 B/s, iops=100 , runt= 60052msec
     # get iops and set type for later usage
-    if ( $line =~ m/ bw=/ ) {
+    elsif ( $line =~ m/ bw=/ ) {
         $type=$iops =$line;
         $type =~ s/[ ]*:.*//;
         $type =~ s/[ ]*//;
         $iops =~ s/.*iops=//;
-        $iops =~ s/ .*//;
+        $iops =~ s/ ?, .*//;
         $iops{$type}=$iops;
-        next;
     }
     # lat (usec): min=7 , max=1305.5K, avg=61053.50, stdev=73135.80
-    if ( $line =~ m/ lat .* stdev=/ ) { # filter out histogram lines that have "lat"
+    elsif ( $line =~ m/ lat .* stdev=/ ) { # filter out histogram lines that have "lat"
         $lat=$unit=$latmin=$latmax=$latstd=$line;
         $lat =~ s/.*avg=//;
         $lat =~ s/,.*//;
@@ -403,15 +386,13 @@ sub parse_line {
 
         $lat{$type}=$lat*$unit;
         $unit{$type}=$unit;
-        next;
     }
     #Starting 1 process
-    if ( $line =~ m/^Starting / ) {
+    elsif ( $line =~ m/^Starting / ) {
         $users=$line;
         $users =~ s/Starting //;
         $users =~ s/ process.*//;
         $users =~ s/ thread.*//;
-        next;
     }
     # lat (usec): 4=97.56%, 10=1.10%, 20=0.09%, 50=0.03%, 100=0.01%
     # lat (usec): 250=0.01%, 500=0.01%, 750=0.01%
@@ -422,7 +403,7 @@ sub parse_line {
 
     # 2 4 10 20 50 100 250 500 750 1000 2000 4000 10000 20000 50000
     # 100000 250000 500000 750000 1000000 2000000 2000000+
-    if ( $line =~ m/ lat / ) {
+    elsif ( $line =~ m/ lat / ) {
         if ( $line =~ m/%/ ) {
             $units=$lats=$line;
             $units =~ s/.*\(//;
@@ -447,16 +428,35 @@ sub parse_line {
             }
         }
     }
-
     # clat percentiles (usec):
+    elsif ( $line =~ m/clat percentiles / ) {
+        $CLAT=1 ;
+        
+        $clat_unit=$line ;
+        $clat_unit =~ s/.*\(//;
+        $clat_unit =~ s/\).*//;
+        if ( $clat_unit eq "usec" ) {
+            $clat_mult = .001 ;
+        }
+        elsif ( $clat_unit eq "msec" ) {
+            $clat_mult = 1;
+        }
+        elsif ( $clat_unit eq "sec" ) {
+            $clat_mult = 1000;
+        }
+        else {
+            printf("clat unit :%s: unknown\n",$clat_unit);
+            printf("exiting \n");
+            exit;
+        }
+    }
     # | 1.00th=[ 179], 5.00th=[ 185], 10.00th=[ 191], 20.00th=[ 195],
     # | 30.00th=[ 199], 40.00th=[ 201], 50.00th=[ 203], 60.00th=[ 207],
     # | 70.00th=[ 215], 80.00th=[ 219], 90.00th=[ 229], 95.00th=[ 266],
     # | 99.00th=[ 398], 99.50th=[ 474], 99.90th=[ 532], 99.95th=[ 796],
     # | 99.99th=[ 1352]
     # bw (KB/s) : min=33040, max=38352, per=100.00%, avg=36799.16, stdev=1312.23
-
-    if ( $CLAT == 1 ) {
+    elsif ( $CLAT == 1 ) {
         if ( $line =~ m/\|/ ) {
             my $parse = $line;
             while ( $parse =~ m/([\d\.]+)th=\[\s*(\d+)\](.*)/ ) {
@@ -487,29 +487,29 @@ sub parse_line {
             $CLAT = 0;
         }
     }
-    if ( $line =~ m/clat percentiles / ) {
-        $CLAT=1 ;
-        # clat percentiles (usec):
-        $clat_unit=$line ;
-        $clat_unit =~ s/.*\(//;
-        $clat_unit =~ s/\).*//;
-        if ( $clat_unit eq "usec" ) {
-            $clat_mult = .001 ;
-        }
-        elsif ( $clat_unit eq "msec" ) {
-            $clat_mult = 1;
-        }
-        elsif ( $clat_unit eq "sec" ) {
-            $clat_mult = 1000;
-        }
-        else {
-            printf("clat unit :%s: unknown\n",$clat_unit);
-            printf("exiting \n");
-            exit;
-        }
+    # READ: io=48216KB, aggrb=802KB/s, minb=822KB/s, maxb=822KB/s, mint=60052msec, maxt=60052msec
+    # WRITE: io=12256KB, aggrb=204KB/s, minb=208KB/s, maxb=208KB/s, mint=60052msec, maxt=60052msec
+    elsif ( $line =~ m/ aggrb=/ ) {
+        $type=$throughput=$line;
+        $type =~ s/:.*//;
+        $type =~ s/[ ][ ]*//;
+        # lower case:
+        $type = lc( $type);
+        $throughput =~ s/.*aggrb=//;
+        $throughput =~ s/,.*//;
+        printf("throughput:%s:\n",$throughput) if defined ($debug);
+        $factor = $throughput;
+        $factor =~ s/.*MB.s/1048576/;
+        $factor =~ s/.*KB.s/1024/;
+        $factor =~ s/.*B.s/1/;
+        $throughput =~ s/MB.s//;
+        $throughput =~ s/KB.s//;
+        $throughput =~ s/B.s//;
+        printf("throughput:%s: factor:%s:\n",$throughput,$factor) if defined ($debug);
+        $throughput{$type}=$throughput*$factor;
     }
-    
-    if ($line =~ m/END/) {
+    # END
+    elsif ($line =~ m/END/) {
         flush_stat_line
     }
     
