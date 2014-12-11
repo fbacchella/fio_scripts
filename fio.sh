@@ -307,6 +307,8 @@ initialize()
     rm /tmp/fio.dd.out $DDOUT
 }
 
+BASEDIR=$(cd $(dirname $0) && pwd -P)
+
 # record size to use when creating a ZFS filesystem
 RECORDSIZE=128k
 RECORDSIZE=8k
@@ -772,25 +774,12 @@ if [ $REMOVE == 1 ]  && [ $RAW == 0 ] ; then
     eval $cmd
 fi
 
-./fioparse.sh $OUTPUT/*out > $OUTPUT/fio_summary.out 
-./fioparse.sh -r $(uname -n) $OUTPUT/*out  > $OUTPUT/fio_summary.r
-cat $OUTPUT/new_fio_summary.r<< __EOF__
-colnames <- c("terse_version", "fio_version", "name", "groupipd", "error",
-"total_io", "bw", "iops", "run",
-"min_s", "max_s", "mean_s", "std_s",
-"min_c", "max_c", "mean_c", "std_c",
-"name","users","bs","MB","lat","min","max","std","iops"
-, "us50","us100","us250","us500","ms1","ms2","ms4","ms10","ms20"
-, "ms50","ms100","ms250","ms500","s1","s2","s5"
-,"p95_00", "p99_00", "p99_50", "p99_90", "p99_95", "p99_99"
-)
-
-__EOF__
-cat $OUTPUT/fio_summary.out
+$BASEDIR/fioparse.sh $OUTPUT/*out > $OUTPUT/fio_summary.out 
+$BASEDIR/fioparse.sh -r $(uname -n) $OUTPUT/*out  > $OUTPUT/fio_summary.r
 cat << __EOF__ > $OUTPUT/plot.r
-source("fiop.r")
+source("$BASEDIR/fiop.r")
 source("$OUTPUT/fio_summary.r")
 dir =  "$OUTPUT"
-source("fiopg.r")
+source("$BASEDIR/fiopg.r")
 __EOF__
-LANG=C R --no-save -f $OUTPUT/plot.r
+LANG=C R --no-save -f $OUTPUT/plot.r > $OUTPUT/R.out
