@@ -143,26 +143,22 @@ EOF
 
 offsets()
 {
-     loops=1
      OFFSET=0
-     NUSERS=`echo $USERS | sed -e 's/^00*//'`
      # make sure MEGABYTES is divisible by 8K
      # divide MEGABYTES by # of users 
-     BASE_IN_8K=`echo "( ($MEGABYTES * 1024) / 8 )" | bc`
+     BASE_IN_8K=$(($MEGABYTES * 1024 / 8))
      if [ $RAW -eq 1 ] ; then 
         BASEOFFSET=`echo "( ($BASE_IN_8K / $USERS)/ $NRAWDEVICES  ) * 8192 " | bc`
      else 
-        BASEOFFSET=`echo "( ($BASE_IN_8K / $USERS)  ) * 8192 " | bc`
+        BASEOFFSET=$(( $BASE_IN_8K / $USERS * 8192))
      fi
-     while [[ $loops -le $NUSERS ]] ; do
-            JOBNUMBER=$loops
-            # job is either write, read, randread, randrw and is
-            # the name of a function that outputs job information to the job file
-            eval $job
-            loops=$(expr $loops + 1)
-            OFFSET=$(expr $OFFSET + $BASEOFFSET )
-            #echo " loops:$loops" 
-            #echo " OFFSET:$OFFSET" 
+     for JOBNUMBER in $(seq 1 $USERS) ; do
+        # job is either write, read, randread, randrw and is
+        # the name of a function that outputs job information to the job file
+        eval $job
+        OFFSET=$(($OFFSET + $BASEOFFSET ))
+        #echo " loops:$loops" 
+        #echo " OFFSET:$OFFSET" 
      done
 }
 
@@ -185,8 +181,7 @@ offsets()
 # time_based=1
 function init
 {
-    for i in 1 ; do
-        cat << EOF
+        cat << EOF > $JOBFILE
 [global]
 $SIZE
 $FILENAME
@@ -199,13 +194,11 @@ group_reporting=1
 ioengine=psync
 fadvise_hint=0
 EOF
-    done > $JOBFILE
 }
 
 # read/write randomm, set block size, vary #  users
 function randrw {
-    for i in 1 ; do
-        cat << EOF
+    cat << EOF >> $JOBFILE
 [job]
 rw=randrw
 rwmixread=80
@@ -213,40 +206,35 @@ bs=8k
 sync=0
 numjobs=$USERS
 EOF
-    done >> $JOBFILE
 }
 
 # read sequential, vary both blocksizes and # of users
 function read {
-    for i in 1 ; do
-        cat << EOF
+    cat << EOF >> $JOBFILE
 [job$JOBNUMBER]
 rw=read
 bs=${READSIZE}k
 numjobs=1
 offset=$OFFSET
 EOF
-    done >> $JOBFILE
 }
 
 
 # read random, set blocksize, vary # of  users
 function readrand {
-    for i in 1 ; do
-        cat << EOF
+    cat << EOF >> $JOBFILE
 [job$JOBNUMBER]
 rw=randread
 bs=8k
 numjobs=1
 offset=$OFFSET
 EOF
-    done >> $JOBFILE
+  
 }
 
 # write sync, set 1 user, vary blocksizes
 function write {
-    for i in 1 ; do
-        cat << EOF
+    cat << EOF >> $JOBFILE
 [job$JOBNUMBER]
 rw=write
 bs=${WRITESIZE}k
@@ -255,7 +243,6 @@ offset=$OFFSET
 sync=1
 direct=0
 EOF
-    done >> $JOBFILE
 }
 
 initialize()
@@ -307,6 +294,14 @@ initialize()
     rm /tmp/fio.dd.out $DDOUT
 }
 
+runjob()
+{
+    # sudo dtrace -c 'fio jobfile' -s fio.d > jobfile.out
+     cmd="$DTRACE1 $BINARY --append-terse $JOBFILE $DTRACE2> ${PREFIX}.out"
+     echo $cmd
+     [[ $EVAL -eq 1 ]] && eval $cmd
+}
+
 BASEDIR=$(cd $(dirname $0) && pwd -P)
 
 # record size to use when creating a ZFS filesystem
@@ -352,15 +347,15 @@ DTRACE=0
 DTRACE1=""
 DTRACE2=""
 
-MULTIUSERS="01 08 16 32 64"
-READSIZES="0008 0032 0128"
-SEQREADSIZES="0128 1024"
+MULTIUSERS="1 8 16 32 64"
+READSIZES="8 32 128"
+SEQREADSIZES="128 1024"
 SEQREADSIZES="1024"
 
-WRITESIZES="0001 0004 0008 0016 0032 0064 0128"
-MULTIWRITEUSERS="01 02 04 08 16"
-WRITESIZES="0001 0008 0128"
-MULTIWRITEUSERS="01 04 16"
+WRITESIZES="1 4 8 16 32 64 128"
+MULTIWRITEUSERS="1 2 4 8 16"
+WRITESIZES="1 8 128"
+MULTIWRITEUSERS="1 4 16"
 
 while getopts d:hz:ycb:nr:xe:d:o:it:s:l:u:m:w: OPTION
 do
@@ -477,11 +472,10 @@ if [ -f /etc/delphix/version ]  ; then
 fi
 
 all="randrw read write readrand"
-all="readrand write read "
-if [ $TESTS = "all" ] ; then
-    jobs=$all
+if [ "$TESTS" = "all" ] ; then
+    jobs="$all"
 else 
-    jobs=$TESTS
+    jobs="$TESTS"
 fi
 
 if [ ! -x "$BINARY" ] ; then
@@ -655,9 +649,9 @@ echo " "
 for job in $jobs; do # {
   # default values if thet don't get set otherwise
   USERS=1
-  WRITESIZE=008
-  READSIZE=008
-  # followng executes when it's a custom test
+  WRITESIZE=8
+  READSIZE=8
+  # following executes when it's a custom test
   if [ $CUSTOMUSERS -gt 0 ] || [ $CUSTOMBLOCKSIZE -gt 0 ] ; then
          echo "CUSTOM, users:$CUSTOMUSERS: blocksize:$CUSTOMBLOCKSIZE" 
          if [ $CUSTOMUSERS -gt  0 ] ; then
@@ -675,96 +669,70 @@ for job in $jobs; do # {
          fi
          loops=1
          OFFSET=0
-         PREFIX="$OUTPUT/${job}_u${USERS}_kb${READSIZE}"
+         PREFIX=$(printf "$OUTPUT/${job}_u%02d_kb%04d" ${USERS} ${READSIZE})
          JOBFILE=${PREFIX}.job
          init
          offsets
-        # sudo dtrace -c 'fio jobfile' -s fio.d > jobfile.out
-         cmd="$DTRACE1 $BINARY $JOBFILE $DTRACE2> ${PREFIX}.out"
-         echo $cmd
-         [[ $EVAL -eq 1 ]] && eval $cmd
+         runjob
   elif [ $job ==  "readrand" ] ; then
-       for USERS in `eval echo $MULTIUSERS` ; do 
-         #echo "j: $USERS"
-         PREFIX="$OUTPUT/${job}_u${USERS}_kb0008"
+       for USERS in $MULTIUSERS ; do 
+         PREFIX=$(printf "$OUTPUT/${job}_u%02d_kb0008" ${USERS})
          JOBFILE=${PREFIX}.job
          # init creates the shared job file potion
          init
          # for random read, offsets shouldn't be needed
-         # offsets
          OFFSET=0
-         loops=1
-         NUSERS=`echo $USERS | sed -e 's/^00*//'`
-         while [[ $loops -le $NUSERS ]] ; do
-            JOBNUMBER=$loops
-            eval $jobs
-            loops=$(expr $loops + 1)
+         for JOBNUMBER in $(seq 0 $USERS) ; do
+            readrand
          done
-         cmd="$DTRACE1 $BINARY $JOBFILE $DTRACE2> ${PREFIX}.out"
-         echo $cmd
-         [[ $EVAL -eq 1 ]] && eval $cmd
+         runjob
        done
   # redo test : 1k, 4k, 8k, 128k, 1024k by 1 user 
   elif [ $job ==  "write" ] ; then
-       for WRITESIZE in `eval echo $WRITESIZES` ; do 
-         for USERS in `eval echo $MULTIWRITEUSERS` ; do 
-           PREFIX="$OUTPUT/${job}_u${USERS}_kb${WRITESIZE}"
+       for WRITESIZE in $WRITESIZES ; do 
+         for USERS in $MULTIWRITEUSERS ; do 
+           PREFIX=$(printf "$OUTPUT/${job}_u%02d_kb%04d" ${USERS} ${WRITESIZE})
            JOBFILE=${PREFIX}.job
            init
            offsets
-           # eval $job
-           cmd="$DTRACE1 $BINARY $JOBFILE $DTRACE2> ${PREFIX}.out"
-           echo $cmd
-           [[ $EVAL -eq 1 ]] && eval $cmd
+           runjob
          done
        done
   #  MB/s test : 1M by 1,8,16,32 users & 8k,32k,128k,1m by 1 user
   elif [ $job ==  "read" ] ; then
-       for READSIZE in `eval echo $READSIZES` ; do 
-         PREFIX="$OUTPUT/${job}_u01_kb${READSIZE}"
+       for READSIZE in $READSIZES ; do 
+         PREFIX=$(printf "$OUTPUT/${job}_u01_kb%04d" ${READSIZE})
          JOBFILE=${PREFIX}.job
          init
          USERS=1
          OFFSET=0
-         eval $job
-         cmd="$DTRACE1 $BINARY $JOBFILE $DTRACE2> ${PREFIX}.out"
-         echo $cmd
-         [[ $EVAL -eq 1 ]] && eval $cmd
+         read
+         runjob
        done
-       for seq_read_size in $SEQREADSIZES; do 
-         for USERS in `eval echo $MULTIUSERS` ; do 
-           #READSIZE=$SEQREADSIZE
-           READSIZE=$seq_read_size
-           #echo "j: $USERS"
-           PREFIX="$OUTPUT/${job}_u${USERS}_kb${seq_read_size}"
+       for READSIZE in $SEQREADSIZES; do 
+         for USERS in $MULTIUSERS ; do 
+           PREFIX=$(printf "$OUTPUT/${job}_u%02d_kb%04d" ${USERS} $READSIZE)
            JOBFILE=${PREFIX}.job
            init
            offsets
-           cmd="$DTRACE1 $BINARY $JOBFILE $DTRACE2> ${PREFIX}.out"
-           echo $cmd
-           [[ $EVAL -eq 1 ]] && eval $cmd
+           runjob
          done
        done
   # workload test: 8k read write by 1,8,16,32 users
   elif [ $job ==  "randrw" ] ; then
-    for USERS in `eval echo $MULTIUSERS` ; do 
-      echo "j: $USERS"
-      PREFIX="$OUTPUT/${job}_u${USERS}"
+    for USERS in $MULTIUSERS ; do 
+      PREFIX=$(printf "$OUTPUT/${job}_u%02d_kb%04d" ${USERS} 8)
       JOBFILE=${PREFIX}.job
       init
-      eval $job
-      cmd="$DTRACE1 $BINARY $JOBFILE $DTRACE2> ${PREFIX}.out"
-      echo $cmd
-      [[ $EVAL -eq 1 ]] && eval $cmd
+      randrw
+      runjob
     done
   else 
     PREFIX="$OUTPUT/$job"
     JOBFILE=${PREFIX}.job
     init
     eval $job
-    cmd="$DTRACE1 $BINARY $JOBFILE $DTRACE2> ${PREFIX}.out"
-    echo $cmd
-    [[ $EVAL -eq 1 ]] && eval $cmd
+    runjob
   fi
 done  # }
 # if we are asked to remove the work file and we are not using RAW, then rm work file
@@ -774,12 +742,14 @@ if [ $REMOVE == 1 ]  && [ $RAW == 0 ] ; then
     eval $cmd
 fi
 
-$BASEDIR/fioparse.sh $OUTPUT/*out > $OUTPUT/fio_summary.out 
-$BASEDIR/fioparse.sh -r $(uname -n) $OUTPUT/*out  > $OUTPUT/fio_summary.r
+echo "jobs finished, parsing the results"
+$BASEDIR/fioparse.sh $OUTPUT/*_u*_kb*.out > $OUTPUT/fio_summary.out 
+$BASEDIR/fioparse.sh -r $(uname -n) $OUTPUT/*_u*_kb*.out  > $OUTPUT/fio_summary.r
 cat << __EOF__ > $OUTPUT/plot.r
 source("$BASEDIR/fiop.r")
 source("$OUTPUT/fio_summary.r")
 dir =  "$OUTPUT"
 source("$BASEDIR/fiopg.r")
 __EOF__
+echo "ploting graphs"
 LANG=C R --no-save -f $OUTPUT/plot.r > $OUTPUT/R.out
