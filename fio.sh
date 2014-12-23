@@ -23,7 +23,7 @@ OPTIONS:
    -w  directory   work directory where fio creates a fio and reads and writes, no default
    -o  directory   output directory, where to put output files, defaults to ./
    -t  tests       tests to run, defaults to all, options are
-                      readrand - IOPS test : 8k by 1,8,16,32 users 
+                      randread - IOPS test : 8k by 1,8,16,32 users 
                       read  - MB/s test : 1M by 1,8,16,32 users & 8k,32k,128k,1m by 1 user
                       write - redo test, ie sync seq writes : 1k, 4k, 8k, 128k, 1024k by 1 user 
                       randrw   - workload test: 8k read write by 1,8,16,32 users 
@@ -40,6 +40,7 @@ OPTIONS:
                    writes will be evenly written across multiple devices,  default is 64GB
    -z raw_sizes    size of each raw device. If multiple, colon separate, list inorder of raw_device
    -r raw_device   use raw device instead of file, multi devices colon separated
+   -R directive    Add an random directive (see random_distribution and other directives in fio(1))
                           
        example
                   fio.sh -b ./fio.opensolaris -w /domain0/fiotest  -t rand_read -s 10 -m 1000 -f
@@ -205,6 +206,7 @@ rwmixread=80
 bs=8k
 sync=0
 numjobs=$USERS
+$RANDOM_DIRECTIVE
 EOF
 }
 
@@ -221,15 +223,15 @@ EOF
 
 
 # read random, set blocksize, vary # of  users
-function readrand {
+function randread {
     cat << EOF >> $JOBFILE
 [job$JOBNUMBER]
 rw=randread
 bs=8k
 numjobs=1
 offset=$OFFSET
+$RANDOM_DIRECTIVE
 EOF
-  
 }
 
 # write sync, set 1 user, vary blocksizes
@@ -357,7 +359,9 @@ MULTIWRITEUSERS="1 2 4 8 16"
 WRITESIZES="1 8 128"
 MULTIWRITEUSERS="1 4 16"
 
-while getopts d:hz:ycb:nr:xe:d:o:it:s:l:u:m:w: OPTION
+RANDOM_DIRECTIVE="random_distribution=random"
+
+while getopts d:hz:ycb:nr:xe:d:o:it:s:l:u:m:w:R: OPTION
 do
      case $OPTION in
          h)
@@ -368,6 +372,9 @@ do
              ;;
          b)
              BINARY=$OPTARG
+             ;;
+         R)
+             RANDOM_DIRECTIVE=$OPTARG
              ;;
          w)
              DIRECTORY=$OPTARG
@@ -471,7 +478,7 @@ if [ -f /etc/delphix/version ]  ; then
     fi
 fi
 
-all="randrw read write readrand"
+all="randrw read write randread"
 if [ "$TESTS" = "all" ] ; then
     jobs="$all"
 else 
@@ -674,7 +681,7 @@ for job in $jobs; do # {
          init
          offsets
          runjob
-  elif [ $job ==  "readrand" ] ; then
+  elif [ $job ==  "randread" ] ; then
        for USERS in $MULTIUSERS ; do 
          PREFIX=$(printf "$OUTPUT/${job}_u%02d_kb0008" ${USERS})
          JOBFILE=${PREFIX}.job
@@ -682,8 +689,8 @@ for job in $jobs; do # {
          init
          # for random read, offsets shouldn't be needed
          OFFSET=0
-         for JOBNUMBER in $(seq 0 $USERS) ; do
-            readrand
+         for JOBNUMBER in $(seq 1 $USERS) ; do
+            randread
          done
          runjob
        done
