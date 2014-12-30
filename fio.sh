@@ -250,6 +250,7 @@ EOF
 initialize()
 {
     DDOUT=$(mktemp -t fio.dd.XXXXXX) 
+    DDLOG=$(mktemp -t fio.dd.out.XXXXXX) 
     echo ""
     echo "creating 10 MB  seed file of random data"
     echo ""
@@ -265,12 +266,11 @@ initialize()
     BEG=$(date +%s)
     while [[ $loops -le $TENMEGABYTES ]] ; do
         let seek=$loops*10
-        cmd="$DD if=$DDOUT of=${outfile} bs=1024k seek=$seek count=10 > /tmp/fio.dd.out 2>&1"
-     # was the command for file
-     # cmd="$DD if=/tmp/fio.$$ of=${outfile} bs=1024k oflag=append conv=notrunc count=1 > /tmp/fio.dd.out 2>&1"
-        eval $cmd
+        #cmd="$DD if=$DDOUT of=${outfile} bs=1024k seek=$seek count=10 >$DDLOG 2>&1"
+        #eval $cmd
+        $DD if=$DDOUT of=${outfile} bs=1024k seek=$seek count=10 2>$DDLOG
         RET=$?
-        if [ $RET -eq 0 ] ; then # {
+        if [ $RET -eq 0 ] ; then
             echo -n "."
             characters=$(expr $characters + 1)
             if [ $characters -gt $linesize ] ; then
@@ -288,12 +288,14 @@ initialize()
                 BEG=`date +%s`
             fi
         else
-            echo "RET:$RET:"
-            cat /tmp/fio.dd.out
+            printf "\n"
+            cat $DDLOG
+            break
         fi
-        loops=$(expr $loops + 1)
+        loops=$(($loops + 1))
     done
-    rm /tmp/fio.dd.out $DDOUT
+    rm $DDLOG $DDOUT
+    [[ $RET -ne 0 ]] && exit $RET
 }
 
 runjob()
