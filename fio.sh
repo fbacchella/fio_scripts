@@ -654,6 +654,8 @@ if [ $RAW -eq 0 ]; then
    eval $cmd | sed -e 's/^/   /'
 fi
 
+JOBSGRAPHS=""
+JOBSEPARATOR=""
 echo " "
 for job in $jobs; do # {
   # default values if thet don't get set otherwise
@@ -684,20 +686,22 @@ for job in $jobs; do # {
          offsets
          runjob
   elif [ $job ==  "randread" ] ; then
-       for USERS in $MULTIUSERS ; do 
-         PREFIX=$(printf "$OUTPUT/${job}_u%02d_kb0008" ${USERS})
-         JOBFILE=${PREFIX}.job
-         # init creates the shared job file potion
-         init
-         # for random read, offsets shouldn't be needed
-         OFFSET=0
-         for JOBNUMBER in $(seq 1 $USERS) ; do
+      JOBSGRAPHS=$(printf '%s%s"randread", "8K"' "$JOBSGRAPHS" $JOBSEPARATOR)
+      for USERS in $MULTIUSERS ; do 
+        PREFIX=$(printf "$OUTPUT/${job}_u%02d_kb0008" ${USERS})
+        JOBFILE=${PREFIX}.job
+        # init creates the shared job file potion
+        init
+        # for random read, offsets shouldn't be needed
+        OFFSET=0
+        for JOBNUMBER in $(seq 1 $USERS) ; do
             randread
-         done
-         runjob
-       done
+        done
+        runjob
+      done
   # redo test : 1k, 4k, 8k, 128k, 1024k by 1 user 
   elif [ $job ==  "write" ] ; then
+      JOBSGRAPHS=$(printf '%s%s"write", "8K", "write", "128K"' "$JOBSGRAPHS" $JOBSEPARATOR)
        for WRITESIZE in $WRITESIZES ; do 
          for USERS in $MULTIWRITEUSERS ; do 
            PREFIX=$(printf "$OUTPUT/${job}_u%02d_kb%04d" ${USERS} ${WRITESIZE})
@@ -709,6 +713,7 @@ for job in $jobs; do # {
        done
   #  MB/s test : 1M by 1,8,16,32 users & 8k,32k,128k,1m by 1 user
   elif [ $job ==  "read" ] ; then
+      JOBSGRAPHS=$(printf '%s%s"read", "1M"' "$JOBSGRAPHS" $JOBSEPARATOR)
        for READSIZE in $READSIZES ; do 
          PREFIX=$(printf "$OUTPUT/${job}_u01_kb%04d" ${READSIZE})
          JOBFILE=${PREFIX}.job
@@ -729,6 +734,7 @@ for job in $jobs; do # {
        done
   # workload test: 8k read write by 1,8,16,32 users
   elif [ $job ==  "randrw" ] ; then
+    JOBSGRAPHS=$(printf '%s%s"randrw", "8K"' "$JOBSGRAPHS" "$JOBSEPARATOR")
     for USERS in $MULTIUSERS ; do 
       PREFIX=$(printf "$OUTPUT/${job}_u%02d_kb%04d" ${USERS} 8)
       JOBFILE=${PREFIX}.job
@@ -743,6 +749,7 @@ for job in $jobs; do # {
     eval $job
     runjob
   fi
+  JOBSEPARATOR=", "
 done  # }
 # if we are asked to remove the work file and we are not using RAW, then rm work file
 if [ $REMOVE == 1 ]  && [ $RAW == 0 ] ; then
@@ -751,6 +758,7 @@ if [ $REMOVE == 1 ]  && [ $RAW == 0 ] ; then
     eval $cmd
 fi
 
+echo 
 echo "jobs finished, parsing the results"
 $BASEDIR/fioparse.sh $OUTPUT/*_u*_kb*.out > $OUTPUT/fio_summary.out 
 $BASEDIR/fioparse.sh -r $(uname -n) $OUTPUT/*_u*_kb*.out  > $OUTPUT/fio_summary.r
@@ -758,6 +766,10 @@ cat << __EOF__ > $OUTPUT/plot.r
 source("$BASEDIR/fiop.r")
 source("$OUTPUT/fio_summary.r")
 dir =  "$OUTPUT"
+l <- NULL
+l <- matrix(c($JOBSGRAPHS),nrow=2)
+tl <- t(l)
+l <- tl
 source("$BASEDIR/fiopg.r")
 __EOF__
 echo "ploting graphs"
