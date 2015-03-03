@@ -760,8 +760,8 @@ fi
 
 echo 
 echo "jobs finished, parsing the results"
-$BASEDIR/fioparse.sh $OUTPUT/*_u*_kb*.out > $OUTPUT/fio_summary.out 
-$BASEDIR/fioparse.sh -r $(uname -n) $OUTPUT/*_u*_kb*.out  > $OUTPUT/fio_summary.r
+$BASEDIR/fioparse.py $OUTPUT/*_u*_kb*.out  > $OUTPUT/fio_summary.r
+printf 'testtype = "%s"' $(uname -n) >> $OUTPUT/fio_summary.r
 cat << __EOF__ > $OUTPUT/plot.r
 source("$BASEDIR/fiop.r")
 source("$OUTPUT/fio_summary.r")
