@@ -713,7 +713,7 @@ for job in $jobs; do # {
        done
   #  MB/s test : 1M by 1,8,16,32 users & 8k,32k,128k,1m by 1 user
   elif [ $job ==  "read" ] ; then
-      JOBSGRAPHS=$(printf '%s%s"read", "1M"' "$JOBSGRAPHS" $JOBSEPARATOR)
+      JOBSGRAPHS=$(printf '%s%s"read", "1024K"' "$JOBSGRAPHS" $JOBSEPARATOR)
        for READSIZE in $READSIZES ; do 
          PREFIX=$(printf "$OUTPUT/${job}_u01_kb%04d" ${READSIZE})
          JOBFILE=${PREFIX}.job
