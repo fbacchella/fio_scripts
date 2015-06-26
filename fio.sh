@@ -634,7 +634,7 @@ fi # }
 
 
 # if the work file doesn't exist or force create is set 
-if [ ! -f $DIRECTORY/$FILE ]  ||  [ $CREATE == 1  ]; then
+if [  -n "$FILE" -a ! -f "$DIRECTORY/$FILE" ]  ||  [ $CREATE == 1  ]; then
    if [ $RAW == 0 ] ; then
        MB_per_LUN=$MEGABYTES
        echo "CREATE $MEGABYTES MB file $DIRECTORY/$FILE"
@@ -646,7 +646,7 @@ if [ ! -f $DIRECTORY/$FILE ]  ||  [ $CREATE == 1  ]; then
 fi
 
 # if we are using a work file and not RAW, get the size of the work file
-if [ $RAW -eq 0 ]; then
+if [ $RAW -eq 0 -a -n "$FILE" ]; then
    cmd="ls -lh $DIRECTORY/$FILE "
    echo "running "
    echo "    $cmd"
