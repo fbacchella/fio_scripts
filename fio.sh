@@ -41,7 +41,7 @@ OPTIONS:
    -z raw_sizes    size of each raw device. If multiple, colon separate, list inorder of raw_device
    -r raw_device   use raw device instead of file, multi devices colon separated
    -R directive    Add an random directive (see random_distribution and other directives in fio(1))
-                          
+   -N run_name    Give a name to the run
        example
                   fio.sh -b ./fio.opensolaris -w /domain0/fiotest  -t rand_read -s 10 -m 1000 -f
 EOF
@@ -336,7 +336,7 @@ MEGABYTES="65536"
 # by default  don't force the run, ie prompt for confirmations
 FORCE="n"
 CREATE=0
-
+TESTTYPE=$(uname -n)
 # whether to execute commands, EVAL=0 would turn
 # command execution off for debuggion
 EVAL=1
@@ -352,18 +352,15 @@ DTRACE1=""
 DTRACE2=""
 
 MULTIUSERS="1 8 16 32 64"
-READSIZES="8 32 128"
-SEQREADSIZES="128 1024"
+READSIZES="8 128"
 SEQREADSIZES="1024"
 
-WRITESIZES="1 4 8 16 32 64 128"
-MULTIWRITEUSERS="1 2 4 8 16"
-WRITESIZES="1 8 128"
-MULTIWRITEUSERS="1 4 16"
+WRITESIZES="8 128 1024"
+MULTIWRITEUSERS="1 8 16 32 64"
 
 RANDOM_DIRECTIVE="random_distribution=random"
 
-while getopts d:hz:ycb:nr:xe:d:o:it:s:l:u:m:w:R: OPTION
+while getopts d:hz:ycb:nr:xe:d:o:it:s:l:u:m:w:R:N: OPTION
 do
      case $OPTION in
          h)
@@ -430,6 +427,9 @@ do
              ;;
          z)
              RAWSIZES=$OPTARG
+             ;;
+         N)
+             TESTTYPE=$OPTARG
              ;;
          ?)
              usage
@@ -761,7 +761,7 @@ fi
 echo 
 echo "jobs finished, parsing the results"
 $BASEDIR/fioparse.py $OUTPUT/*_u*_kb*.out  > $OUTPUT/fio_summary.r
-printf 'testtype = "%s"' $(uname -n) >> $OUTPUT/fio_summary.r
+printf 'testtype = "%s"' $TESTTYPE >> $OUTPUT/fio_summary.r
 cat << __EOF__ > $OUTPUT/plot.r
 source("$BASEDIR/fiop.r")
 source("$OUTPUT/fio_summary.r")
