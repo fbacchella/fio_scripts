@@ -64,7 +64,7 @@ for latency in latency_buckets:
 cvsinput = csv.DictReader(csv_values, fieldnames=csv_columns, delimiter=';', quoting=csv.QUOTE_NONNUMERIC)
 
 latency_reducer = collections.OrderedDict()
-latency_reducer['us50'] =(2, 4, 10, 20, 50)
+latency_reducer['us50'] = (2, 4, 10, 20, 50)
 latency_reducer['us100'] = (100,)
 latency_reducer['us250'] = (250,)
 latency_reducer['us500'] = (500,)
@@ -100,12 +100,16 @@ for row in cvsinput:
     print '%s"%s", %d, "%dK", ' % (prefix, test, users, bs),
     colnames += ["name","users","bs"]
     
-    print "%.3f," % (row["r_bw"] / 1024 + row["w_bw"] / 1024),
-    colnames += ["MB"]
-    
+    print "%.3f," % (row["r_bw"] / 1024),
+    print "%.3f," % (row["w_bw"] / 1024),
+    colnames += ["MB_r", "MB_w"]
+
     print "% 8.3f, % 8.1f, % 8.0f, % 8.1f," % (row["r_clat_mean"] / 1000, row["r_clat_min"] / 1000, row["r_clat_max"] / 1000, row["r_clat_std"] / 1000),
-    colnames += ["lat","min","max","std"]
-    
+    colnames += ["r_lat","r_min","r_max","r_std"]
+
+    print "% 8.3f, % 8.1f, % 8.0f, % 8.1f," % (row["w_clat_mean"] / 1000, row["w_clat_min"] / 1000, row["w_clat_max"] / 1000, row["w_clat_std"] / 1000),
+    colnames += ["w_lat","w_min","w_max","w_std"]
+
     print "%d, " % (row['r_IOPS'] + row['w_IOPS']),
     colnames += ["iops"]
     
@@ -122,22 +126,33 @@ for row in cvsinput:
         print "%.0f, " % (row['lat_dist_reduced_%s' % reduced_bucket]),
         colnames += [reduced_bucket]
         
-    #Resolve percentiles columns to percentiles bucket
+    #Resolve read percentiles columns to read percentiles bucket
     for i in range(1,21):
         val = row['r_clat_perc_%.d' % i]
         (percentile, latency) = val.split("=")
         percentile=float(percentile)
         latency=float(latency)
         row['r_clat_perc_bucket_%.2f' % percentile ] = latency / 1000
-    print "%.3f, %.3f, %.3f, %.3f, %.3f, %.3f" % (row['r_clat_perc_bucket_95.00'], row['r_clat_perc_bucket_99.00'], row['r_clat_perc_bucket_99.50'], row['r_clat_perc_bucket_99.90'], row['r_clat_perc_bucket_99.95'], row['r_clat_perc_bucket_99.99']),
-    colnames += ["p95_00", "p99_00", "p99_50", "p99_90", "p99_95", "p99_99"]
-    
+    print "%.3f, %.3f, %.3f, %.3f, %.3f, %.3f," % (row['r_clat_perc_bucket_95.00'], row['r_clat_perc_bucket_99.00'], row['r_clat_perc_bucket_99.50'], row['r_clat_perc_bucket_99.90'], row['r_clat_perc_bucket_99.95'], row['r_clat_perc_bucket_99.99']),
+    colnames += ["r_p95_00", "r_p99_00", "r_p99_50", "r_p99_90", "r_p99_95", "r_p99_99"]
+
+    #Resolve write percentiles columns to write percentiles bucket
+    for i in range(1,21):
+        val = row['w_clat_perc_%.d' % i]
+        (percentile, latency) = val.split("=")
+        percentile=float(percentile)
+        latency=float(latency)
+        row['w_clat_perc_bucket_%.2f' % percentile ] = latency / 1000
+    print "%.3f, %.3f, %.3f, %.3f, %.3f, %.3f" % (row['w_clat_perc_bucket_95.00'], row['w_clat_perc_bucket_99.00'], row['w_clat_perc_bucket_99.50'], row['w_clat_perc_bucket_99.90'], row['w_clat_perc_bucket_99.95'], row['w_clat_perc_bucket_99.99']),
+    colnames += ["w_p95_00", "w_p99_00", "w_p99_50", "w_p99_90", "w_p99_95", "w_p99_99"]
+
     print
     prefix =", "
-print """),nrow=31)
+
+print """),nrow=%d)
 tm <- t(m)
 m <-tm
-colnames <- c("""
+colnames <- c(""" % len(colnames)
 print '"%s"' % '", "' .join(colnames)
 #name","users","bs","MB","lat","min","max","std","iops"
 #, "us50","us100","us250","us500","ms1","ms2","ms4","ms10","ms20"
@@ -146,5 +161,4 @@ print '"%s"' % '", "' .join(colnames)
 print """)
 colnames(m)=colnames
 m <- data.frame(m)
-testtype = "ng635"
 """

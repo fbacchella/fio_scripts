@@ -50,7 +50,8 @@ graphit <- function(
                     i_plot_99   = 1,
                     i_plot_9999 = 1,
                     i_scalelat  = "avg",
-                    i_plots = 2
+                    i_plots = 2,
+                    i_readwrite_percentiles = "read"
                     ) {
 
     # 
@@ -94,15 +95,6 @@ graphit <- function(
         i_bs = "8K"
         i_scalex = "users"
     }
-    if ( i_name == "randread" ) {
-        maxMBs = 100
-    }
-    if ( i_name == "read" ) {
-        maxMBs = 400
-    }
-    if ( i_name == "write" ) {
-        maxMBs = 100
-    }
     # 
     # if i_users > 0 then users is defined as a single value
     # ie, block sizes vary 
@@ -129,8 +121,17 @@ graphit <- function(
         print(rr)
         i_scalex = "users"
     } else {
-        cat("no block sise\n");
+        cat("no block size\n");
     }
+
+    # do we want percentile graphs for read or write
+    # default to read, switch to write in write only operation
+    # can be changed for read_write
+    if (i_name == "write") {
+        i_readwrite_percentiles = "write";
+    }
+    cat("percentiles types", i_name, i_readwrite_percentiles)
+    print("====")
 
     #
     # HISTOGRAM extract the histogram latency values out of rr
@@ -186,19 +187,35 @@ graphit <- function(
     # 
     # extract various columns from the data (in rr)
     # 
-    lat    <- as.numeric(t(rr['lat']))
     users  <- as.numeric(t(rr['users']))
     bs     <- as.character(t(rr['bs']))
-    min    <- as.numeric(t(rr['min']))
-    maxlat <- as.numeric(t(rr['max']))
-    std    <- as.numeric(t(rr['std']))
-    MB     <- as.numeric(t(rr['MB']))
-    p95_00 <- as.numeric(t(rr['p95_00']))
-    p99_00 <- as.numeric(t(rr['p99_00']))
-    p99_50 <- as.numeric(t(rr['p99_50']))
-    p99_90 <- as.numeric(t(rr['p99_90']))
-    p99_95 <- as.numeric(t(rr['p99_95']))
-    p99_99 <- as.numeric(t(rr['p99_99']))
+    MB_r   <- as.numeric(t(rr['MB_r']))
+    MB_w   <- as.numeric(t(rr['MB_w']))
+    iops   <- as.numeric(t(rr['iops']))
+    if(i_readwrite_percentiles == "read") {
+        lat    <- as.numeric(t(rr['r_lat']))
+        min    <- as.numeric(t(rr['r_min']))
+        maxlat <- as.numeric(t(rr['r_max']))
+        std    <- as.numeric(t(rr['r_std']))
+        p95_00 <- as.numeric(t(rr['r_p95_00']))
+        p99_00 <- as.numeric(t(rr['r_p99_00']))
+        p99_50 <- as.numeric(t(rr['r_p99_50']))
+        p99_90 <- as.numeric(t(rr['r_p99_90']))
+        p99_95 <- as.numeric(t(rr['r_p99_95']))
+        p99_99 <- as.numeric(t(rr['r_p99_99']))
+    } else {
+        lat    <- as.numeric(t(rr['w_lat']))
+        min    <- as.numeric(t(rr['w_min']))
+        maxlat <- as.numeric(t(rr['w_max']))
+        std    <- as.numeric(t(rr['w_std']))
+        p95_00 <- as.numeric(t(rr['w_p95_00']))
+        p99_00 <- as.numeric(t(rr['w_p99_00']))
+        p99_50 <- as.numeric(t(rr['w_p99_50']))
+        p99_90 <- as.numeric(t(rr['w_p99_90']))
+        p99_95 <- as.numeric(t(rr['w_p99_95']))
+        p99_99 <- as.numeric(t(rr['w_p99_99']))
+    }
+    cat("lat =", lat)
     cols   <- 1:length(lat)
     minlat <- 0.05
     p95_00 <- pmax(p95_00 ,minlat)
@@ -289,7 +306,7 @@ graphit <- function(
     #    botom:    shorter rectangle  on bottom  for MB/s
     #
     if ( i_plots == 2 )  {
-        nf <- layout(matrix(c(2:1)), widths = 13, heights = c(7, 3), respect = TRUE)
+        nf <- layout(matrix(c(2:1)), widths = 13, heights = c(7, 5), respect = TRUE)
     }
     if ( i_plots == 3 )  {
         nf <- layout(matrix(c(3:1)), widths = 13, heights = c(7, 3, 3), respect = TRUE)
@@ -298,24 +315,27 @@ graphit <- function(
     # set margins (bottom, left, top, right)
     #   get rid of top, so the bottome graph is flush with one above
     #         B  L  T  R
-    par(mar=c(2, 4, 0, 4))
+    par(mar=c(2, 4, 1, 4))
 
     #
     # GRAPH  NEW  1
     #
     #     MB/s BARS in bottom graph
     #
-    logMB <- log(MB+1)
-    MBbars <- t(t(fhist)*logMB)
-    colnames(MBbars) = col_labels
+    values = matrix(c(rbind(MB_r+1, MB_w+1)),nrow=2, dimnames = list(c("read", "write"), users))
+    print(values)
     #         B  L  T  R
-    par(mar=c(2, 4, 0, 4))
-    op <- barplot(MBbars,col=colors,ylab="MB/s",border=NA,space=1, ylim=c(0,log(1200)),xlim=c(1,2*length(lat)+1),
-                  yaxt  = "n" )
-    text(op, pmin((logMB),log(400)),round(MB),adj=c(0.2,-.2),col="gray20")
-
-    ypts  <-  c(    log(2),       log(11),    log(101),  log(1001));
-    ylbs  <-  c(  "1",  "10", "100",  "1000");
+    #par(mar=c(0, 0, 0, 0))
+    #col="green"
+    #, beside=TRUE
+    #border=NA,space=1,
+    op <- barplot(values, 2/3, space=c(0,1), col=c("green","blue"), ylab="MB/s", ylim=c(1,1201),xlim=c(1,2*length(lat)+1),
+                  yaxt = "n", beside=TRUE, border=NA, legend.text = FALSE, log="y")
+    text( (op[1,] + op[2,])/2, pmin(pmax(MB_r,MB_w),400), paste(iops,"iop/s"),adj=c(0.4,-.2),col="gray20", cex=2/3)
+    print(op[2,] - op[1,])
+    print(op)
+    ypts  <-  c(    1,       11,   101,  1001);
+    ylbs  <-  c(  "0",  "10", "100",  "1000");
     axis(2,at=ypts, labels=ylbs)
 
     #
@@ -396,8 +416,8 @@ graphit <- function(
     #
     # ms10 SUCCESS overlay on top graph ( latency lines )
     #
-    op <- barplot(ms10, col=c("#C6D4F8", "#C9FACF",  "#FFF6A0"),ylim =c(0,1), xlab="", ylab="",border=NA,space=0,yaxt="n",xaxt="n") 
-    par(new = TRUE )
+    #op <- barplot(ms10, col=c("#C6D4F8", "#C9FACF",  "#FFF6A0"),ylim =c(0,1), xlab="", ylab="",border=NA,space=0,yaxt="n",xaxt="n")
+    #par(new = TRUE )
 
     # AVERGE get's ploted twice because there has to be something to initialize the graph
     # whether that something is really wanted or used, the graph has to be initialized
@@ -449,7 +469,7 @@ graphit <- function(
     #
     if ( i_plot_avg == 1 ) {
         par(new = TRUE)
-        plot(cols, lat, type = "l", xaxs = "i", lty = 1, col = "gray30", lwd = 1, bty = "l", 
+        plot(cols, lat, type = "l", xaxs = "i", lty = 1, col = "gray30", lwd = 1, bty = "l",
              xlim = c(xminwidth,xmaxwidth), ylim = ylims, ylab = "" , xlab="",log = mylog, yaxt = "n" , xaxt ="n")
         text(cols,lat,round(lat,1),adj=c(1,2))
         title(main=i_title)
@@ -460,7 +480,7 @@ graphit <- function(
     #
     if ( i_plot_95 == 1 ) {
         par(new = TRUE)
-        plot(cols, p95_00, type = "l", xaxs = "i", lty = 5, col = "grey40", lwd = 1, bty = "l", 
+        plot(cols, p95_00, type = "l", xaxs = "i", lty = 5, col = "grey40", lwd = 1, bty = "l",
         xlim = c(xminwidth,xmaxwidth), ylim = ylims, ylab = "" , xlab="",log = mylog, yaxt = "n" , xaxt ="n") 
         text(tail(cols,n=1),tail(p95_00, n=1),"95%",adj=c(0,0),col="gray20",cex=.7)
     }
@@ -495,9 +515,10 @@ graphit <- function(
       cat("max\n")
       print(maxlat)
       par(new = TRUE)
-      plot(cols, maxlat, type = "l", xaxs = "i", lty = 3, col = "red", lwd = 1, bty = "l", 
+      op = plot(cols, maxlat, type = "l", xaxs = "i", lty = 3, col = "red", lwd = 1, bty = "l",
        xlim = c(xminwidth,xmaxwidth), ylim = ylims, ylab = "" , log = mylog, xlab="",yaxt = "n" , xaxt ="n") 
       text(cols,maxlat,round(maxlat,1),adj=c(1,-1))
+      print(op)
     }
 
     #
@@ -520,9 +541,9 @@ graphit <- function(
 
   #
   # reference dashed line at 10ms
-  for ( i in  c(10)  )  {
-   segments(0,   i, xmaxwidth,  i,  col="orange",   lwd=1,lty=2)
-  }
+  #for ( i in  c(10)  )  {
+  # segments(0,   i, xmaxwidth,  i,  col="orange",   lwd=1,lty=2)
+  #}
 
 }
 
