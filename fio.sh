@@ -668,13 +668,13 @@ for job in $jobs; do # {
          if [ $CUSTOMUSERS -gt  0 ] ; then
              echo "CUSTOM, users:$CUSTOMUSERS: " 
          fi
-         if  [  $CUSTOMBLOCKSIZE -gt  0 ] ; then
+         if  [ $CUSTOMBLOCKSIZE -gt  0 ] ; then
              echo "CUSTOM,  blocksize:$CUSTOMBLOCKSIZE" 
          fi
-         if [ $CUSTOMUSERS > -1 ] ; then
+         if [ $CUSTOMUSERS -gt -1 ] ; then
             USERS=$CUSTOMUSERS
          fi
-         if [  $CUSTOMBLOCKSIZE > -1 ] ; then
+         if [ $CUSTOMBLOCKSIZE -gt -1 ] ; then
              WRITESIZE=$CUSTOMBLOCKSIZE
              READSIZE=$CUSTOMBLOCKSIZE
          fi
