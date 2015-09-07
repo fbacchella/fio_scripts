@@ -694,6 +694,7 @@ for job in $jobs; do # {
             USERS=$CUSTOMUSERS
          fi
          if [ $CUSTOMBLOCKSIZE -gt -1 ] ; then
+             JOBSGRAPHS=$(printf '%s%s"%s", "$CUSTOMBLOCKSIZEK"' "$JOBSGRAPHS" $JOBSEPARATOR $job)
              WRITESIZE=$CUSTOMBLOCKSIZE
              READSIZE=$CUSTOMBLOCKSIZE
          fi
