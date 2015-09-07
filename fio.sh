@@ -148,19 +148,25 @@ EOF
 offsets()
 {
      OFFSET=0
-     # make sure MEGABYTES is divisible by 8K
-     # divide MEGABYTES by # of users 
-     BASE_IN_8K=$(($MEGABYTES * 1024 / 8))
-     if [ $RAW -eq 1 ] ; then 
-        BASEOFFSET=`echo "( ($BASE_IN_8K / $USERS)/ $NRAWDEVICES  ) * 8192 " | bc`
-     else 
-        BASEOFFSET=$(( $BASE_IN_8K / $USERS * 8192))
+     #Don't modify offset if filename is not given
+     if [ -n "$FILENAME" ] ; then
+         # make sure MEGABYTES is divisible by 8K
+         # divide MEGABYTES by # of users 
+         BASE_IN_8K=$(($MEGABYTES * 1024 / 8))
+         if [ $RAW -eq 1 ] ; then 
+            BASEOFFSET=`echo "( ($BASE_IN_8K / $USERS)/ $NRAWDEVICES  ) * 8192 " | bc`
+         else 
+            BASEOFFSET=$(( $BASE_IN_8K / $USERS * 8192))
+         fi
      fi
      for JOBNUMBER in $(seq 1 $USERS) ; do
         # job is either write, read, randread, randrw and is
         # the name of a function that outputs job information to the job file
         eval $job
-        OFFSET=$(($OFFSET + $BASEOFFSET ))
+        #Don't modify offset if filename is not given
+        if [ -n "$FILENAME" ] ; then
+            OFFSET=$(($OFFSET + $BASEOFFSET ))
+        fi
         #echo " loops:$loops" 
         #echo " OFFSET:$OFFSET" 
      done
