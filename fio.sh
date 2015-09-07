@@ -340,7 +340,7 @@ REMOVE=0
 BINARY="$(type -p fio)"
 DIRECTORY=""
 OUTPUT="/tmp"
-TESTS="all"
+TESTS=""
 SECS="60"
 MEGABYTES="65536"
 # by default  don't force the run, ie prompt for confirmations
@@ -431,7 +431,7 @@ do
              CREATE=1
              ;;
          t)
-             TESTS=$OPTARG
+             TESTS="$TESTS $OPTARG"
              ;;
          x)
              REMOVE=1
@@ -499,7 +499,7 @@ if [ -f /etc/delphix/version ]  ; then
 fi
 
 all="randrw read write randread"
-if [ "$TESTS" = "all" ] ; then
+if [ "$TESTS" = "all" -o -z "$TESTS" ] ; then
     jobs="$all"
 else 
     jobs="$TESTS"
