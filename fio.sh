@@ -41,9 +41,10 @@ OPTIONS:
    -z raw_sizes    size of each raw device. If multiple, colon separate, list inorder of raw_device
    -r raw_device   use raw device instead of file, multi devices colon separated
    -R directive    Add an random directive (see random_distribution and other directives in fio(1))
-   -N run_name    Give a name to the run
+   -N run_name     Give a name to the run
        example
-                  fio.sh -b ./fio.opensolaris -w /domain0/fiotest  -t rand_read -s 10 -m 1000 -f
+                   fio.sh -b ./fio.opensolaris -w /domain0/fiotest  -t rand_read -s 10 -m 1000 -f
+   -E engine       chose engine
 EOF
 }
 
@@ -192,7 +193,7 @@ runtime=$SECS
 randrepeat=0
 end_fsync=1
 group_reporting=1
-ioengine=psync
+ioengine=$ENGINE
 fadvise_hint=0
 EOF
 }
@@ -360,7 +361,9 @@ MULTIWRITEUSERS="1 8 16 32 64"
 
 RANDOM_DIRECTIVE="random_distribution=random"
 
-while getopts d:hz:ycb:nr:xe:d:o:it:s:l:u:m:w:R:N: OPTION
+ENGINE="psync"
+
+while getopts d:hz:ycb:nr:xe:d:o:it:s:l:u:m:w:R:N:E: OPTION
 do
      case $OPTION in
          h)
@@ -430,6 +433,9 @@ do
              ;;
          N)
              TESTTYPE=$OPTARG
+             ;;
+         E)
+             ENGINE=$OPTARG
              ;;
          ?)
              usage
