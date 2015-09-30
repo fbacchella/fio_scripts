@@ -88,8 +88,8 @@ graphit <- function(
     #
     if ( i_name != "undefined" ) {
         rr <- subset(rr,rr['name'] == i_name )
-        cat("rr filtered for name=",i_name,"\n");
-        print(rr)
+        cat("test ",i_name,"\n");
+        #print(rr)
     } else {
         rr <- subset(rr,rr['name'] == "randread" )
         i_bs = "8K"
@@ -103,26 +103,16 @@ graphit <- function(
     #
     if ( i_users > 0 ) {
         rr <- subset(rr,rr['users'] == i_users )
-        cat("rr filterd for users=",i_users,"\n");
-        print(rr)
+        cat("    rr filterd for users=",i_users,"\n");
         i_scalex = "bs"
-    } else {
-        cat("no users\n");
-    }
-    # 
-    # if i_bs > 0 then block size is defined as a single value
-    # ie, users vary 
-    #
-    #   XAXIS =   USERS   
-    #
-    if ( i_bs != "undefined" ) {
+    } else if ( i_bs != "undefined" ) {
         rr <- subset(rr,rr['bs'] == i_bs )
-        cat("rr filterd for bs=",i_bs,"\n");
-        print(rr)
+        cat("    rr filterd for bs=",i_bs,"\n");
         i_scalex = "users"
     } else {
         cat("no block size\n");
     }
+    print(rr)
 
     # do we want percentile graphs for read or write
     # default to read, switch to write in write only operation
@@ -322,7 +312,7 @@ graphit <- function(
     #
     #     MB/s BARS in bottom graph
     #
-    values = matrix(c(rbind(MB_r+1, MB_w+1)),nrow=2, dimnames = list(c("read", "write"), users))
+    values = matrix(c(rbind(MB_r+1, MB_w+1)),nrow=2, dimnames = list(c("read", "write"), col_labels))
     print(values)
     #         B  L  T  R
     #par(mar=c(0, 0, 0, 0))
