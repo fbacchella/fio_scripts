@@ -7,16 +7,17 @@ import subprocess
 import os
 from distutils import spawn
 import signal
-import re
 import platform
 import copy
 import time
+import cStringIO
+
 
 def merge_dicts(*dict_args):
-    '''
+    """
     Given any number of dicts, shallow copy and merge into a new dict,
     precedence goes to key value pairs in latter dicts.
-    '''
+    """
     result = {}
     for dictionary in dict_args:
         result.update(dictionary)
@@ -65,7 +66,7 @@ class Executor(object):
 
     @staticmethod
     def terminate_child():
-        if hasattr(Executor,'process') and Executor.process is not None:
+        if hasattr(Executor, 'process') and Executor.process is not None:
             Executor.process.terminate()
             polled = 0
             while Executor.process.poll() is None and polled < 5:
@@ -83,18 +84,20 @@ class Executor(object):
             try:
                 if not os.access(filename_path, os.X_OK):
                     raise FioException("no executable command '%s'" % filename_path)
-            except OSError as e:
-                raise FioException("no valid command path '%s': '%s'" % (filename_path, e))
+            except OSError as ex:
+                raise FioException("no valid command path '%s': '%s'" % (filename_path, ex))
         else:
             raise FioException("command '%s' not found in path" % filename)
         return filename_path
 
     def __init__(self, argv, debug=None, follow_stdout=False, forget=False, **kwargs):
         realbinary = Executor.check_executable(argv[0])
-        self.argv = [ realbinary ] + argv[1:]
+        self.argv = [realbinary] + argv[1:]
         self.status = None
         self.forget = forget
         self.kwargs = dict(list(Executor.default.items()) + list(kwargs.items()))
+        self.stdoutdata = None
+        self.stderrdata = None
         if follow_stdout:
             self.kwargs['stdout'] = None
         if debug is None:
@@ -141,9 +144,11 @@ fadvise_hint=0
 
 jobs_callables = {}
 
+
 def new_job(f):
     jobs_callables[f.func_name] = f
     return f
+
 
 ######
 # All the tests function
@@ -160,6 +165,7 @@ numjobs=%(USERS)s
 """ % merge_dicts({'USERS': numjobs}, jobs_args)
         return content
 
+
 @new_job
 def read(numjobs, **jobs_args):
         content = ""
@@ -172,6 +178,7 @@ offset=%(OFFSET)s
 """ % merge_dicts({'JOBNUMBER': i}, jobs_args)
         return content
 
+
 @new_job
 def randread(numjobs, **jobs_args):
         content = ""
@@ -182,8 +189,9 @@ bs=%(BLOCKSIZE)sk
 numjobs=1
 offset=%(OFFSET)s
 %(RANDOM_DIRECTIVE)s
-""" % merge_dicts({'JOBNUMBER': i + 1 }, jobs_args)
+""" % merge_dicts({'JOBNUMBER': i + 1}, jobs_args)
         return content
+
 
 @new_job
 def write(numjobs, **jobs_args):
@@ -205,38 +213,47 @@ def run_job(job, fio, job_file_prefix, block_size, numjobs, job_args):
     job_file.write(job_init(BLOCKSIZE=block_size, **job_args))
     job_file.write(job(numjobs, BLOCKSIZE=block_size, **job_args))
     job_file.close()
-    e = Executor([fio, "--append-terse", job_file_prefix + ".job"],
-                 stdout = open(job_file_prefix + ".out", "w"),
-                 stderr=sys.stderr
-    ).run().check()
+    Executor([fio, "--append-terse", job_file_prefix + ".job", "--output", job_file_prefix + ".out"],
+             stdout=sys.stdout,
+             stderr=sys.stderr).run().check()
 
 
-def do_r(rootdir, outputdir, run_name, jobsinfo):
-    parser = [ rootdir + "/fioparse.py"]
-    parser += map( lambda x: "%s/%s_u%02d_kb%04d.out" % (outputdir, x[0], x[1], x[2]), jobsinfo)
+def do_r(rootdir, outputdir, run_name, graphtype, jobsinfo):
+    parser = [rootdir + "/fioparse.py"]
+    parser += map(lambda x: "%s/%s_u%02d_kb%04d.out" % (outputdir, x[0], x[1], x[2]), jobsinfo)
     summary_file = open(outputdir + "/fio_summary.r", "w")
-    e = Executor(parser,
-                 stdout = summary_file,
-                 stderr=sys.stderr
-    ).run()
+    Executor(parser,
+             stdout=summary_file,
+             stderr=sys.stderr).run()
     summary_file.write('testtype = "%s"\n' % run_name)
     summary_file.close()
-    jobsgraph = reduce(lambda x,y: x + [ '"%s"' % y[0], '"%dK"' % y[2] ], jobsinfo, [])
+    if graphtype == 'default':
+        jobsgraph = ['"randread"', '"8K"', '0',
+                     '"read"', '"1024K"', '0',
+                     '"read"', '"undefined"', '1',
+                     '"read"', '"undefined"', '8',
+                     '"write"', '"undefined"', '1',
+                     '"write"', '"undefined"', '8',
+                     '"randrw"', '"8K"', '0', ]
+    elif graphtype == 'block':
+        jobsgraph = reduce(lambda x, y: x + ['"%s"' % y[0], '"undefined"', '%d' % y[1]], jobsinfo, [])
+    elif graphtype == 'users':
+        jobsgraph = reduce(lambda x, y: x + ['"%s"' % y[0], '"%dK"' % y[2], '0'], jobsinfo, [])
+    else:
+        raise FioException("invalid graph type")
     plotr_file = open(outputdir + "/plot.r", "w")
     plotr_file.write("""source("%(rootdir)s/fiop.r")
 source("%(outputdir)s/fio_summary.r")
 dir =  "%(outputdir)s"
-l <- NULL
-l <- matrix(c(%(jobsgraphs)s),nrow=2)
-tl <- t(l)
-l <- tl
+jobs <- NULL
+jobs <- matrix(c(%(jobsgraphs)s), nrow=3)
+jobs <- t(jobs)
 source("%(rootdir)s/fiopg.r")
 """ % {'rootdir': rootdir, 'outputdir': outputdir, 'jobsgraphs': ", ".join(jobsgraph)})
     plotr_file.close()
-    e = Executor(["R", "--no-save", "-f", outputdir + "/plot.r"],
-                 stdout = open("%s/R.out" % outputdir, "w"),
-                 stderr=sys.stderr
-    ).run().check()
+    Executor(["R", "--no-save", "-f", outputdir + "/plot.r"],
+             stdout=open("%s/R.out" % outputdir, "w"),
+             stderr=sys.stderr).run().check()
 
 
 def main():
@@ -250,10 +267,10 @@ def main():
     parser.add_option("-o", "--outputdir", action="store", dest="outputdir")
     parser.add_option("-t", "--test", action="append", dest="tests",
                       help="""tests to run, defaults to all, options are
-                              randread - IOPS test : 8k by 1,8,16,32 users 
-                              read  - MB/s test : 1M by 1,8,16,32 users & 8k,32k,128k,1m by 1 user
+                              randread - IOPS test : 8k by 1, 8, 16, 32, 64 users 
+                              read  - MB/s test : 1M by 1,8,16,32 users & 8k, 32k, 128k, 1024k by 1 user
                               write - redo test, ie sync seq writes : 1k, 4k, 8k, 128k, 1024k by 1 user 
-                              randrw   - workload test: 8k read write by 1,8,16,32 users""")
+                              randrw   - workload test: 8k read write by 1,8,16,32, 64 users""")
     parser.add_option("-s", "--seconds", action="store", dest="seconds", type=type(1),
                       help="seconds to run each test for, default 60")
     parser.add_option("-m", "--megabytes", action="store", dest="megabytes", type=type(1))
@@ -262,11 +279,8 @@ def main():
                       help="test only use this many users")
     parser.add_option("-l", "--blocksize", action="append", dest="blocksizes", type=type(1), 
                       help="test only use this blocksize in KB, ie 1-1024")
-    # -e recordsize   use this recordsize if/when creating the zfs file system, default 8K
-    # -d              Use DTrace on the run
     # -x              remove work file after run
     # -y              initialize raw devices to "-m megabytes" with writes 
-    # -r raw_device   use raw device instead of file, multi devices colon separated
     parser.add_option("-r", "--raw_device", action="store", dest="raw_device",
                       help="use raw device instead of file")
     parser.add_option("-R", "--random", action="store", dest="random_directive",
@@ -279,8 +293,12 @@ def main():
                       help="configure engine, append this definition to [global] section")
     parser.add_option("-D", "--distant", action="store_true", dest="distant",
                       help="engine is distant (hdfs, ceph)")
+    parser.add_option("-B", "--graph_block", action="store_const", dest="graph_type", const="block",
+                      help="with non default run, keep users, change block size in graph")
+    parser.add_option("-U", "--graph_users", action="store_const", dest="graph_type", const="users",
+                      help="with non default run, keep block size, change users in graph")
     
-    default_options= {
+    default_options = {
         'directio': False,
         'fiobinary': "fio",
         'workdir': None,
@@ -297,6 +315,7 @@ def main():
         'distant': False,
         'engine': "psync",
         'engine_conf': "",
+        'graph_type': 'default'
     }
 
     parser.set_defaults(**default_options)
@@ -320,10 +339,14 @@ def main():
         workdir = options.workdir
 
     if len(options.tests) == 0:
-        tests = [ 'randrw', 'read', 'randread', 'write']
+        tests = ['randrw', 'read', 'randread', 'write']
     else:
         tests = options.tests
-
+    
+    # if non default tests runs, change the graph type
+    if len(options.tests) > 0 or len(options.users) > 0 or len(options.blocksizes) > 0:
+        if options.graph_type == 'default':
+            options.graph_type = 'users'
 
     default_args = {
         'MEGABYTES': options.megabytes,
@@ -332,29 +355,35 @@ def main():
         'ENGINE': options.engine,
         'ENGINECONF': options.engine_conf,
         'OFFSET': '0',
-        'DIRECTORYCMD': 'directory=%s' % (workdir),
+        'DIRECTORYCMD': 'directory=%s' % workdir,
         'DIRECT': '1' if options.directio else '0',
         'SECS': options.seconds,
     }
 
     jobs_settings = {
-        'randread': ({ 'blocksizes': (8,), 'users': (1, 8, 16, 32) },),
-        'read': ({ 'blocksizes': (1024,), 'users': (1, 8, 16, 32) },
-                 { 'blocksizes': (8, 32, 128, 1024,), 'users': (1,) },
-                ),
-        'write': ({ 'blocksizes': (8, 128), 'users': (1,) },),
-        'randrw': ({ 'blocksizes': (8,), 'users': (1, 8, 16, 32) },),
+        'randread': ({'blocksizes': (8,), 'users': (1, 8, 16, 32, 64)}, ),
+        'read': ({'blocksizes': (1024,), 'users': (1, 8, 16, 32, 64)},
+                 {'blocksizes': (1, 4, 8, 128, 1024), 'users': (1, 8)}, ),
+        'write': ({'blocksizes': (1, 4, 8, 128, 1024), 'users': (1, 8)}, ),
+        'randrw': ({'blocksizes': (8,), 'users': (1, 8, 16, 32, 64)}, ),
     }
 
+    default_args['SIZE'] = "size=%dm" % options.megabytes
     if not options.individual_files:
         default_args['FILENAME'] = 'filename=fiodata'
-        default_args['SIZE'] = "size=%dm" % (options.megabytes)
     else:
         default_args['FILENAME'] = ""
+    # never extend or reuse a smaller filer, start from scratch
+    if options.raw_device is None:
+        default_args['FILENAME'] += "\noverwrite=0\nfile_append=0"
 
     jobs_done = set()
     for job in tests:
-        job_callable = jobs_callables[job]
+        try:
+            job_callable = jobs_callables[job]
+        except KeyError:
+            raise FioException("%s is not a valid test name" % job)
+
         for job_setting in jobs_settings[job]:
             #Extract some settings from job definition
             if len(options.blocksizes) == 0:
@@ -373,19 +402,14 @@ def main():
                         # test already done, don't run again
                         continue
                     job_args = copy.copy(default_args)
-                    # if individual files per process, the global size is the same
-                    if options.individual_files:
-                        job_size = int(options.megabytes / u)
-                        if job_size < 1:
-                            raise FioException("job size too small, with %d users" % u)
-                        job_args['SIZE'] = "size=%dm" % (job_size)
 
                     job_prefix_name = "%s_u%02d_kb%04d" % (job, u, bs)
+                    print "running %s, %d users, %dk block" % (job, u, bs)
                     run_job(job_callable, fiobinary, job_prefix_name, bs, u, job_args)
                     jobs_done.add((job, u, bs))
-                    #jobs_done += []
-        print "jobs finished, parsing the results"
-    do_r(rootdir, outputdir, options.run_name, jobs_done)
+    print "jobs finished, parsing the results"
+    jobs_done = sorted(jobs_done, key=lambda x: "%s_u%02d_kb%04d.out" % (x[0], x[1], x[2]))
+    do_r(rootdir, outputdir, options.run_name, options.graph_type, jobs_done)
 
 
 if __name__ == "__main__":

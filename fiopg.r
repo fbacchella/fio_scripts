@@ -3,16 +3,6 @@ poly=1
 hist=1
 ppi <- 300
 
-jobs <- NULL 
-jobs <- matrix(c("randread", "8K", 0,
-                 "read", "1024K", 0,
-                 "read", "undefined", 1,
-                 "read", "undefined", 8,
-                 "write", "undefined", 1,
-                 "write", "undefined", 8,
-                 "randrw", "8K", 0)
-               , nrow=3)
-jobs <- t(jobs)
 for (i in 1:dim(jobs)[1]) {
     testname <- jobs[i,1]
     bs <- jobs[i,2]
