@@ -138,9 +138,10 @@ randrepeat=0
 end_fsync=1
 group_reporting=1
 ioengine=%(ENGINE)s
-fadvise_hint=0
+fadvise_hint=%(FADVISE)s
 %(ENGINECONF)s""" % jobs_args
     return content
+
 
 jobs_callables = {}
 
@@ -150,12 +151,12 @@ def new_job(f):
     return f
 
 
-######
+# #####
 # All the tests function
 ######
 @new_job
 def randrw(numjobs, **jobs_args):
-        content = """[job]
+    content = """[job]
 rw=randrw
 rwmixread=80
 bs=%(BLOCKSIZE)sk
@@ -163,41 +164,41 @@ sync=0
 numjobs=%(USERS)s
 %(RANDOM_DIRECTIVE)s
 """ % merge_dicts({'USERS': numjobs}, jobs_args)
-        return content
+    return content
 
 
 @new_job
 def read(numjobs, **jobs_args):
-        content = ""
-        for i in range(numjobs):
-            content += """[job%(JOBNUMBER)s]
+    content = ""
+    for i in range(numjobs):
+        content += """[job%(JOBNUMBER)s]
 rw=read
 bs=%(BLOCKSIZE)sk
 numjobs=1
 offset=%(OFFSET)s
 """ % merge_dicts({'JOBNUMBER': i}, jobs_args)
-        return content
+    return content
 
 
 @new_job
 def randread(numjobs, **jobs_args):
-        content = ""
-        for i in range(numjobs):
-            content += """[job%(JOBNUMBER)s]
+    content = ""
+    for i in range(numjobs):
+        content += """[job%(JOBNUMBER)s]
 rw=randread
 bs=%(BLOCKSIZE)sk
 numjobs=1
 offset=%(OFFSET)s
 %(RANDOM_DIRECTIVE)s
 """ % merge_dicts({'JOBNUMBER': i + 1}, jobs_args)
-        return content
+    return content
 
 
 @new_job
 def write(numjobs, **jobs_args):
-        content = ""
-        for i in range(numjobs):
-            content += """[job%(JOBNUMBER)s]
+    content = ""
+    for i in range(numjobs):
+        content += """[job%(JOBNUMBER)s]
 rw=write
 bs=%(BLOCKSIZE)sk
 numjobs=1
@@ -205,7 +206,7 @@ offset=%(OFFSET)s
 sync=1
 direct=%(DIRECT)s
 """ % merge_dicts({'JOBNUMBER': i + 1}, jobs_args)
-        return content
+    return content
 
 
 def run_job(job, fio, job_file_prefix, block_size, numjobs, job_args):
@@ -216,6 +217,7 @@ def run_job(job, fio, job_file_prefix, block_size, numjobs, job_args):
     Executor([fio, "--append-terse", job_file_prefix + ".job", "--output", job_file_prefix + ".out"],
              stdout=sys.stdout,
              stderr=sys.stderr).run().check()
+    print
 
 
 def do_r(rootdir, outputdir, run_name, graphtype, jobsinfo):
@@ -277,7 +279,7 @@ def main():
     parser.add_option("-i", "--individual", action="store_true", dest="individual_files")
     parser.add_option("-u", "--users", action="append", dest="users", type=type(1),
                       help="test only use this many users")
-    parser.add_option("-l", "--blocksize", action="append", dest="blocksizes", type=type(1), 
+    parser.add_option("-l", "--blocksize", action="append", dest="blocksizes", type=type(1),
                       help="test only use this blocksize in KB, ie 1-1024")
     # -x              remove work file after run
     # -y              initialize raw devices to "-m megabytes" with writes 
@@ -297,7 +299,9 @@ def main():
                       help="with non default run, keep users, change block size in graph")
     parser.add_option("-U", "--graph_users", action="store_const", dest="graph_type", const="users",
                       help="with non default run, keep block size, change users in graph")
-    
+    parser.add_option("--fadvise", action="store_true", dest="fadvise",
+                      help="activate fadvise hint")
+
     default_options = {
         'directio': False,
         'fiobinary': "fio",
@@ -315,7 +319,8 @@ def main():
         'distant': False,
         'engine': "psync",
         'engine_conf': "",
-        'graph_type': 'default'
+        'graph_type': 'default',
+        'fadvise': False,
     }
 
     parser.set_defaults(**default_options)
@@ -342,15 +347,18 @@ def main():
         tests = ['randrw', 'read', 'randread', 'write']
     else:
         tests = options.tests
-    
+
     # if non default tests runs, change the graph type
     if len(options.tests) > 0 or len(options.users) > 0 or len(options.blocksizes) > 0:
         if options.graph_type == 'default':
             options.graph_type = 'users'
 
+    ternary_if = lambda x, y, z: y if x else z
+
     default_args = {
         'MEGABYTES': options.megabytes,
-        'FILE': 'fiodata' if options.raw_device is None else options.raw_device,
+        'FILE': ternary_if(options.raw_device is None, 'fiodata', options.raw_device)
+        #'fiodata'  if options.raw_device is None else options.raw_device,
         'RANDOM_DIRECTIVE': options.random_directive,
         'ENGINE': options.engine,
         'ENGINECONF': options.engine_conf,
@@ -358,6 +366,7 @@ def main():
         'DIRECTORYCMD': 'directory=%s' % workdir,
         'DIRECT': '1' if options.directio else '0',
         'SECS': options.seconds,
+        'FADVISE': '1' if options.fadvise else '0',
     }
 
     jobs_settings = {
@@ -390,7 +399,7 @@ def main():
                 blocksizes = job_setting['blocksizes']
             else:
                 blocksizes = options.blocksizes
-            
+
             if len(options.users) == 0:
                 users = job_setting['users']
             else:
