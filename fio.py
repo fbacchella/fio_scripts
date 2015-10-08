@@ -330,18 +330,19 @@ def main():
     Executor.check_executable("R")
     fiobinary = Executor.check_executable(options.fiobinary)
 
-    rootdir = os.getcwdu()
-    os.chdir(options.outputdir)
-    outputdir = os.getcwdu()
-    if options.workdir is None and options.raw_device is None:
-        raise FioException("work directory or raw device must be specified")
+    old_runningdir = os.getcwdu()
+    rootdir = os.path.dirname(os.path.abspath(__file__))
+    if options.workdir is None and options.raw_device is None and not options.distant:
+        raise FioException("work directory or raw device must be specified or a distant test")
     if not options.distant and options.workdir is not None:
-        os.chdir(rootdir)
         os.chdir(options.workdir)
         workdir = os.getcwdu()
-        os.chdir(outputdir)
+        os.chdir(old_runningdir)
     else:
         workdir = options.workdir
+
+    os.chdir(options.outputdir)
+    outputdir = os.getcwdu()
 
     if len(options.tests) == 0:
         tests = ['randrw', 'read', 'randread', 'write']
