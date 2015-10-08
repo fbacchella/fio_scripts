@@ -266,6 +266,8 @@ def main():
                       help="name of fio binary, defaults to fio")
     parser.add_option("-w", "--workdir", action="store", dest="workdir",
                       help="work directory where fio creates a fio and reads and writes, no default")
+    parser.add_option("-r", "--raw_device", action="store", dest="raw_device",
+                      help="use raw device instead of file")
     parser.add_option("-o", "--outputdir", action="store", dest="outputdir")
     parser.add_option("-t", "--test", action="append", dest="tests",
                       help="""tests to run, defaults to all, options are
@@ -283,8 +285,6 @@ def main():
                       help="test only use this blocksize in KB, ie 1-1024")
     # -x              remove work file after run
     # -y              initialize raw devices to "-m megabytes" with writes 
-    parser.add_option("-r", "--raw_device", action="store", dest="raw_device",
-                      help="use raw device instead of file")
     parser.add_option("-R", "--random", action="store", dest="random_directive",
                       help="Add an random directive (see random_distribution and other directives in fio(1)")
     parser.add_option("-N", "--run_name", action="store", dest="run_name",
@@ -306,6 +306,7 @@ def main():
         'directio': False,
         'fiobinary': "fio",
         'workdir': None,
+        'raw_device': None,
         'outputdir': ".",
         'tests': [],
         'seconds': 60,
@@ -313,7 +314,6 @@ def main():
         'individual_files': False,
         'users': [],
         'blocksizes': [],
-        'raw_device': None,
         'random_directive': "random_distribution=random",
         'run_name': platform.node(),
         'distant': False,
@@ -333,9 +333,9 @@ def main():
     rootdir = os.getcwdu()
     os.chdir(options.outputdir)
     outputdir = os.getcwdu()
-    if options.workdir is None:
-        raise FioException("work directory must be specified")
-    if not options.distant:
+    if options.workdir is None and options.raw_device is None:
+        raise FioException("work directory or raw device must be specified")
+    if not options.distant and options.workdir is not None:
         os.chdir(rootdir)
         os.chdir(options.workdir)
         workdir = os.getcwdu()
@@ -357,13 +357,11 @@ def main():
 
     default_args = {
         'MEGABYTES': options.megabytes,
-        'FILE': ternary_if(options.raw_device is None, 'fiodata', options.raw_device)
-        #'fiodata'  if options.raw_device is None else options.raw_device,
         'RANDOM_DIRECTIVE': options.random_directive,
         'ENGINE': options.engine,
         'ENGINECONF': options.engine_conf,
         'OFFSET': '0',
-        'DIRECTORYCMD': 'directory=%s' % workdir,
+        'DIRECTORYCMD': ternary_if(workdir is not None, 'directory=%s' % workdir, ''),
         'DIRECT': '1' if options.directio else '0',
         'SECS': options.seconds,
         'FADVISE': '1' if options.fadvise else '0',
@@ -377,11 +375,13 @@ def main():
         'randrw': ({'blocksizes': (8,), 'users': (1, 8, 16, 32, 64)}, ),
     }
 
-    default_args['SIZE'] = "size=%dm" % options.megabytes
-    if not options.individual_files:
-        default_args['FILENAME'] = 'filename=fiodata'
+    if options.raw_device is None:
+        default_args['SIZE'] = "size=%dm" % options.megabytes
+        default_args['FILENAME'] = 'filename=%s' % ternary_if(not options.individual_files, 'fiodata', '')
     else:
-        default_args['FILENAME'] = ""
+        default_args['SIZE'] = ""
+        default_args['FILENAME'] = options.raw_device
+
     # never extend or reuse a smaller filer, start from scratch
     if options.raw_device is None:
         default_args['FILENAME'] += "\noverwrite=0\nfile_append=0"
