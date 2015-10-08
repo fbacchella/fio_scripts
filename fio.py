@@ -139,7 +139,8 @@ end_fsync=1
 group_reporting=1
 ioengine=%(ENGINE)s
 fadvise_hint=%(FADVISE)s
-%(ENGINECONF)s""" % jobs_args
+%(ENGINECONF)s
+""" % jobs_args
     return content
 
 
