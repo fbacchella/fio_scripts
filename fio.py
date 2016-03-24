@@ -380,13 +380,12 @@ def main():
     if options.raw_device is None:
         default_args['SIZE'] = "size=%dm" % options.megabytes
         default_args['FILENAME'] = 'filename=%s' % ternary_if(not options.individual_files, 'fiodata', '')
+        # never extend or reuse a smaller filer, start from scratch
+        default_args['FILENAME'] += "\noverwrite=0\nfile_append=0"
     else:
         default_args['SIZE'] = ""
-        default_args['FILENAME'] = options.raw_device
+        default_args['FILENAME'] = 'filename=%s' % options.raw_device
 
-    # never extend or reuse a smaller filer, start from scratch
-    if options.raw_device is None:
-        default_args['FILENAME'] += "\noverwrite=0\nfile_append=0"
 
     jobs_done = set()
     for job in tests:
