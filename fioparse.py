@@ -8,15 +8,13 @@ import os
 import collections
 
 csv_lines = ""
+csv_re = re.compile('^\d+;fio-[\d\.]+;')
 for f in sys.argv:
     prefix = os.path.basename(f)
     with open(f, "r") as outfile:
-        csv_line = False
         for line in outfile:
-            if csv_line:
+            if csv_re.match(line) is not None:
                 csv_lines += "%s;%s" % (prefix, line)
-            elif line.strip() == 'Additional Terse Output:':
-                csv_line = True
 
 # The fio run output is cleaned to be parsable by a csv.reader
 csv_values = []
