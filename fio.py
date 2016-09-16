@@ -159,7 +159,7 @@ def new_job(f):
 def randrw(numjobs, **jobs_args):
     content = """[job]
 rw=randrw
-rwmixread=80
+rwmixread=50
 bs=%(BLOCKSIZE)sk
 sync=0
 numjobs=%(USERS)s
