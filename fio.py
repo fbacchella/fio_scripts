@@ -254,7 +254,12 @@ jobs <- t(jobs)
 source("%(rootdir)s/fiopg.r")
 """ % {'rootdir': rootdir, 'outputdir': outputdir, 'jobsgraphs': ", ".join(jobsgraph)})
     plotr_file.close()
-    Executor(["R", "--no-save", "-f", outputdir + "/plot.r"],
+    try:
+        rbinary = Executor.check_executable("R")
+    except FioException:
+        print "R executable not found, will not generate graph"
+        return
+    Executor([rbinary, "--no-save", "-f", outputdir + "/plot.r"],
              stdout=open("%s/R.out" % outputdir, "w"),
              stderr=sys.stderr).run().check()
 
@@ -328,11 +333,6 @@ def main():
     (options, args) = parser.parse_args()
 
     # resolve some path
-    try:
-        rbinary = Executor.check_executable("R")
-    except FioException:
-        print "will not generate graph"
-        rbinary = None
     fiobinary = Executor.check_executable(options.fiobinary)
 
     old_runningdir = os.getcwdu()

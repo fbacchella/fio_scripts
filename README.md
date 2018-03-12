@@ -98,6 +98,11 @@ Running fioparse.py
 Once the benchmarks have been run, fio.py uses fioparse.py to extract a consise
 set of statistics from the output files that will be imported in R.
 
+If R is not found, a plot.r file is generated that can be used on a server where R is installed and that can be launched
+with the command
+
+        R --no-save -f .../plot.r
+
 Graphing in R
 -----------------------------------------
 
