@@ -139,6 +139,7 @@ end_fsync=1
 group_reporting=1
 ioengine=%(ENGINE)s
 fadvise_hint=%(FADVISE)s
+%(LOCKMEM)s
 %(ENGINECONF)s
 """ % jobs_args
     return content
@@ -307,6 +308,7 @@ def main():
                       help="with non default run, keep block size, change users in graph")
     parser.add_option("--fadvise", action="store_true", dest="fadvise",
                       help="activate fadvise hint")
+    parser.add_option("-L", "--lockmem", action="store", dest="lockmem", help="Total memory to lock (megabytes)", type=type(1))
 
     default_options = {
         'directio': False,
@@ -327,6 +329,7 @@ def main():
         'engine_conf': "",
         'graph_type': 'default',
         'fadvise': False,
+        'lockmem': 0,
     }
 
     parser.set_defaults(**default_options)
@@ -371,6 +374,7 @@ def main():
         'DIRECT': '1' if options.directio else '0',
         'SECS': options.seconds,
         'FADVISE': '1' if options.fadvise else '0',
+        'LOCKMEM': '',
     }
 
     jobs_settings = {
@@ -416,6 +420,10 @@ def main():
                         # test already done, don't run again
                         continue
                     job_args = copy.copy(default_args)
+
+                    # lockmem changes with the number of worker
+                    if options.lockmem > 0:
+                        job_args['LOCKMEM'] = 'lockmem=%s' % (options.lockmem * 1024 * 1024 / u)
 
                     job_prefix_name = "%s_u%02d_kb%04d" % (job, u, bs)
                     print "running %s, %d users, %dk block" % (job, u, bs)
