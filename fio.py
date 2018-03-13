@@ -423,8 +423,7 @@ def main():
                     jobs_done.add((job, u, bs))
     print "jobs finished, parsing the results"
     jobs_done = sorted(jobs_done, key=lambda x: "%s_u%02d_kb%04d.out" % (x[0], x[1], x[2]))
-    if rbinary is not None:
-        do_r(rootdir, outputdir, options.run_name, options.graph_type, jobs_done)
+    do_r(rootdir, outputdir, options.run_name, options.graph_type, jobs_done)
 
 
 if __name__ == "__main__":
