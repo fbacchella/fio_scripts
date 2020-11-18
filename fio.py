@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # -*- coding: UTF-8 -*-
 
 import sys
@@ -10,7 +10,8 @@ import signal
 import platform
 import copy
 import time
-import cStringIO
+import io
+from functools import reduce
 
 
 def merge_dicts(*dict_args):
@@ -42,12 +43,12 @@ class ProcessException(FioException):
         str_out = ""
         if self.stdout is not None:
             str_out = "stdout:\n"
-            for l in cStringIO.StringIO(self.stdout):
+            for l in io.StringIO(self.stdout):
                 str_out += "**** %s" % l
         str_err = ""
         if self.stderr is not None:
             str_err = "stderr:\n"
-            for l in cStringIO.StringIO(self.stderr):
+            for l in io.StringIO(self.stderr):
                 str_err += "**** %s" % l
         output = """command %s failed
     %s
@@ -103,7 +104,7 @@ class Executor(object):
         if debug is None:
             debug = Executor.debug
         if debug:
-            print "'%s'" % "' '".join(self.argv)
+            print("'%s'" % "' '".join(self.argv))
 
     def run(self, input=None):
         if not self.forget:
@@ -149,7 +150,7 @@ jobs_callables = {}
 
 
 def new_job(f):
-    jobs_callables[f.func_name] = f
+    jobs_callables[f.__name__] = f
     return f
 
 
@@ -219,12 +220,12 @@ def run_job(job, fio, job_file_prefix, block_size, numjobs, job_args):
     Executor([fio, "--append-terse", job_file_prefix + ".job", "--output", job_file_prefix + ".out"],
              stdout=sys.stdout,
              stderr=sys.stderr).run().check()
-    print
+    print()
 
 
 def do_r(rootdir, outputdir, run_name, graphtype, jobsinfo):
     parser = [rootdir + "/fioparse.py"]
-    parser += map(lambda x: "%s/%s_u%02d_kb%04d.out" % (outputdir, x[0], x[1], x[2]), jobsinfo)
+    parser += ["%s/%s_u%02d_kb%04d.out" % (outputdir, x[0], x[1], x[2]) for x in jobsinfo]
     summary_file = open(outputdir + "/fio_summary.r", "w")
     Executor(parser,
              stdout=summary_file,
@@ -258,7 +259,7 @@ source("%(rootdir)s/fiopg.r")
     try:
         rbinary = Executor.check_executable("R")
     except FioException:
-        print "R executable not found, will not generate graph"
+        print("R executable not found, will not generate graph")
         return
     Executor([rbinary, "--no-save", "-f", outputdir + "/plot.r"],
              stdout=open("%s/R.out" % outputdir, "w"),
@@ -338,19 +339,19 @@ def main():
     # resolve some path
     fiobinary = Executor.check_executable(options.fiobinary)
 
-    old_runningdir = os.getcwdu()
+    old_runningdir = os.getcwd()
     rootdir = os.path.dirname(os.path.abspath(__file__))
     if options.workdir is None and options.raw_device is None and not options.distant:
         raise FioException("work directory or raw device must be specified or a distant test")
     if not options.distant and options.workdir is not None:
         os.chdir(options.workdir)
-        workdir = os.getcwdu()
+        workdir = os.getcwd()
         os.chdir(old_runningdir)
     else:
         workdir = options.workdir
 
     os.chdir(options.outputdir)
-    outputdir = os.getcwdu()
+    outputdir = os.getcwd()
 
     if len(options.tests) == 0:
         tests = ['randrw', 'read', 'randread', 'write']
@@ -426,10 +427,10 @@ def main():
                         job_args['LOCKMEM'] = 'lockmem=%s' % (options.lockmem * 1024 * 1024 / u)
 
                     job_prefix_name = "%s_u%02d_kb%04d" % (job, u, bs)
-                    print "running %s, %d users, %dk block" % (job, u, bs)
+                    print("running %s, %d users, %dk block" % (job, u, bs))
                     run_job(job_callable, fiobinary, job_prefix_name, bs, u, job_args)
                     jobs_done.add((job, u, bs))
-    print "jobs finished, parsing the results"
+    print("jobs finished, parsing the results")
     jobs_done = sorted(jobs_done, key=lambda x: "%s_u%02d_kb%04d.out" % (x[0], x[1], x[2]))
     do_r(rootdir, outputdir, options.run_name, options.graph_type, jobs_done)
 
@@ -438,7 +439,7 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except FioException as e:
-        print e
+        print(e)
         Executor.terminate_child()
         sys.exit(1)
     except KeyboardInterrupt:

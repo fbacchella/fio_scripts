@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # -*- coding: UTF-8 -*-
 
 import sys
@@ -82,45 +82,46 @@ latency_reducer['s1'] = (750000, 1000000)
 latency_reducer['s2'] = (2000000,)
 latency_reducer['s5'] = (20000000,)
 
-print """m <- NULL 
-m <- matrix(c("""
+print("""m <- NULL 
+m <- matrix(c(""")
 
 filename_re = re.compile(r'([a-z]+)_u(\d+)_kb(\d+).out')
 
 prefix = "  "
 
-for row in cvsinput:    
+for row in cvsinput:
     colnames = []
-    
+
     #extract job details from filename
     m = filename_re.match(row["filename"])
     if m is None:
         continue
     test = m.group(1)
     users = int(m.group(2))
-    bs = int(m.group(3))    
-    print '%s"%s", %d, "%dK", ' % (prefix, test, users, bs),
+    bs = int(m.group(3))
+    line = '%s"%s", %d, "%dK", ' % (prefix, test, users, bs)
+    print(line, end=' ')
     colnames += ["name", "users", "bs"]
     
-    print "%.3f," % (row["r_bw"] / 1024),
-    print "%.3f," % (row["w_bw"] / 1024),
+    print("%.3f," % (row["r_bw"] / 1024), end=' ')
+    print("%.3f," % (row["w_bw"] / 1024), end=' ')
     colnames += ["MB_r", "MB_w"]
 
-    print "% 8.3f, % 8.1f, % 8.0f, % 8.1f," % (row["r_clat_mean"] / 1000,
+    print("% 8.3f, % 8.1f, % 8.0f, % 8.1f," % (row["r_clat_mean"] / 1000,
                                                row["r_clat_min"] / 1000,
                                                row["r_clat_max"] / 1000,
-                                               row["r_clat_std"] / 1000),
+                                               row["r_clat_std"] / 1000), end=' ')
     colnames += ["r_lat", "r_min", "r_max", "r_std"]
 
-    print "% 8.3f, % 8.1f, % 8.0f, % 8.1f," % (row["w_clat_mean"] / 1000,
+    print("% 8.3f, % 8.1f, % 8.0f, % 8.1f," % (row["w_clat_mean"] / 1000,
                                                row["w_clat_min"] / 1000,
                                                row["w_clat_max"] / 1000,
-                                               row["w_clat_std"] / 1000),
+                                               row["w_clat_std"] / 1000), end=' ')
     colnames += ["w_lat", "w_min", "w_max", "w_std"]
 
-    print "%d, " % (row['r_IOPS'] + row['w_IOPS']),
+    print("%d, " % (row['r_IOPS'] + row['w_IOPS']), end=' ')
     colnames += ["iops"]
-    
+
     # join latency buckets
     sum_val = 0
     for (reduced_bucket, source_buckets) in latency_reducer.items():
@@ -130,8 +131,8 @@ for row in cvsinput:
         row['lat_dist_reduced_%s' % reduced_bucket] = val
         sum_val += val
 
-    for reduced_bucket in latency_reducer.keys():
-        print "%.0f, " % (row['lat_dist_reduced_%s' % reduced_bucket]),
+    for reduced_bucket inlatency_reducer.keys():
+        print("%.0f, " % (row['lat_dist_reduced_%s' % reduced_bucket]), end=' ')
         colnames += [reduced_bucket]
         
     #Resolve read percentiles columns to read percentiles bucket
@@ -141,12 +142,12 @@ for row in cvsinput:
         percentile = float(percentile)
         latency = float(latency)
         row['r_clat_perc_bucket_%.2f' % percentile] = latency / 1000
-    print "%.3f, %.3f, %.3f, %.3f, %.3f, %.3f," % (row['r_clat_perc_bucket_95.00'],
+    print("%.3f, %.3f, %.3f, %.3f, %.3f, %.3f," % (row['r_clat_perc_bucket_95.00'],
                                                    row['r_clat_perc_bucket_99.00'],
                                                    row['r_clat_perc_bucket_99.50'],
                                                    row['r_clat_perc_bucket_99.90'],
                                                    row['r_clat_perc_bucket_99.95'],
-                                                   row['r_clat_perc_bucket_99.99']),
+                                                   row['r_clat_perc_bucket_99.99']), end=' ')
     colnames += ["r_p95_00", "r_p99_00", "r_p99_50", "r_p99_90", "r_p99_95", "r_p99_99"]
 
     #Resolve write percentiles columns to write percentiles bucket
@@ -156,23 +157,23 @@ for row in cvsinput:
         percentile = float(percentile)
         latency = float(latency)
         row['w_clat_perc_bucket_%.2f' % percentile] = latency / 1000
-    print "%.3f, %.3f, %.3f, %.3f, %.3f, %.3f" % (row['w_clat_perc_bucket_95.00'],
+    print("%.3f, %.3f, %.3f, %.3f, %.3f, %.3f" % (row['w_clat_perc_bucket_95.00'],
                                                   row['w_clat_perc_bucket_99.00'],
                                                   row['w_clat_perc_bucket_99.50'],
                                                   row['w_clat_perc_bucket_99.90'],
                                                   row['w_clat_perc_bucket_99.95'],
-                                                  row['w_clat_perc_bucket_99.99']),
+                                                  row['w_clat_perc_bucket_99.99']), end=' ')
     colnames += ["w_p95_00", "w_p99_00", "w_p99_50", "w_p99_90", "w_p99_95", "w_p99_99"]
 
-    print
+    print()
     prefix = ", "
 
-print """),nrow=%d)
+print("""),nrow=%d)
 tm <- t(m)
 m <-tm
-colnames <- c(""" % len(colnames)
-print '"%s"' % '", "' .join(colnames)
-print """)
+colnames <- c(""" % len(colnames))
+print('"%s"' % '", "' .join(colnames))
+print(""")
 colnames(m)=colnames
 m <- data.frame(m)
-"""
+""")
