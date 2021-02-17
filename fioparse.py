@@ -131,7 +131,7 @@ for row in cvsinput:
         row['lat_dist_reduced_%s' % reduced_bucket] = val
         sum_val += val
 
-    for reduced_bucket inlatency_reducer.keys():
+    for reduced_bucket in latency_reducer.keys():
         print("%.0f, " % (row['lat_dist_reduced_%s' % reduced_bucket]), end=' ')
         colnames += [reduced_bucket]
         
