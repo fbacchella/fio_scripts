@@ -291,8 +291,6 @@ def main():
                       help="test only use this many users")
     parser.add_option("-l", "--blocksize", action="append", dest="blocksizes", type=type(1),
                       help="test only use this blocksize in KB, ie 1-1024")
-    # -x              remove work file after run
-    # -y              initialize raw devices to "-m megabytes" with writes 
     parser.add_option("-R", "--random", action="store", dest="random_directive",
                       help="Add an random directive (see random_distribution and other directives in fio(1)")
     parser.add_option("-N", "--run_name", action="store", dest="run_name",
